@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.utils as tutils
 import pandas as pd
+from typing import List
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -120,10 +121,10 @@ def process_sample(sample, emb_dictionary, get_gold_path=False):
                 gold_moves.append(3)
                 parser.reduce()
 
-    print("enc_sentence", len(enc_sentence))
-    print("gold_path", len(gold_path))
-    print("gold_moves", len(gold_moves))
-    print("gold", len(gold))
+    # print("enc_sentence", len(enc_sentence))
+    # print("gold_path", len(gold_path))
+    # print("gold_moves", len(gold_moves))
+    # print("gold", len(gold))
     return enc_sentence, gold_path, gold_moves, gold
 
 
@@ -137,24 +138,25 @@ from datasets import load_dataset
 train_dataset = load_dataset("universal_dependencies", "en_lines", split="train")
 dev_dataset = load_dataset("universal_dependencies", "en_lines", split="validation")
 test_dataset = load_dataset("universal_dependencies", "en_lines", split="test")
-print(len(train_dataset))
-print(len(dev_dataset))
-print(len(test_dataset))
+print(len(train_dataset))  # type: ignore
+print(len(dev_dataset))  # type: ignore
+print(len(test_dataset))  # type: ignore
+
 
 # %%
 # Remove non projective trees
 train_dataset = [
     sample
     for sample in train_dataset
-    if is_projective([-1] + [int(head) for head in sample["head"]])
+    if is_projective([-1] + [int(head) for head in sample["head"]])  # type: ignore
 ]
 
 # %%
 # create the embedding dictionary
 emb_dictionary = create_dictionary(train_dataset)
 print(len(train_dataset))
-print(len(dev_dataset))
-print(len(test_dataset))
+print(len(dev_dataset))  # type: ignore
+print(len(test_dataset))  # type: ignore
 
 # %% [markdown]
 # ## DataLoaders
@@ -174,25 +176,25 @@ def prepare_batch(batch_data, get_gold_path=False):
     paths = [s[1] for s in data]
     moves = [s[2] for s in data]
     trees = [s[3] for s in data]
-    print(f"sentences{len(sentences[0])}")
-    print(f"paths{len(paths[0])}")
-    print("moves", len(moves[0]))
-    print("trees", len(trees[0]))
+    # print(f"sentences{len(sentences[0])}")
+    # print(f"paths{len(paths[0])}")
+    # print("moves", len(moves[0]))
+    # print("trees", len(trees[0]))
     return sentences, paths, moves, trees
 
 
 BATCH_SIZE = 32
 
-train_dataloader = tutils.data.DataLoader(
+train_dataloader = tutils.data.DataLoader(  # type:ignore
     train_dataset,
     batch_size=BATCH_SIZE,
     shuffle=True,
     collate_fn=partial(prepare_batch, get_gold_path=True),
 )
-dev_dataloader = tutils.data.DataLoader(
+dev_dataloader = tutils.data.DataLoader(  # type: ignore
     dev_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=partial(prepare_batch)
 )
-test_dataloader = tutils.data.DataLoader(
+test_dataloader = tutils.data.DataLoader(  # type:ignore
     test_dataset,
     batch_size=BATCH_SIZE,
     shuffle=False,
@@ -251,7 +253,7 @@ class Net(nn.Module):
         h, (h_0, c_0) = self.lstm(x)
         h, h_sizes = torch.nn.utils.rnn.pad_packed_sequence(h)
 
-        print(f"h_sizes: {sum(h_sizes)},\n h.shape {h.shape}\n ")
+        # print(f"h_sizes: {sum(h_sizes)},\n h.shape {h.shape}\n ")
 
         # for each parser configuration that we need to score we arrange from the
         # output of the bi-lstm the correct input for the feedforward
@@ -273,16 +275,16 @@ class Net(nn.Module):
                 )
         mlp_input = torch.stack(mlp_input).to(self.device)
 
-        print(f"len(paths){len(paths)}")
+        # print(f"len(paths){len(paths)}")
         # run the feedforward and get the scores for each possible action
         # out = self.mlp(mlp_input)
-        print("0", mlp_input.shape)
+        # print("0", mlp_input.shape)
         x = self.dropout(mlp_input)
-        print("1", x.shape)
+        # print("1", x.shape)
         x = self.w1(x)
-        print("2", x.shape)
+        # print("2", x.shape)
         x = self.activation(x)
-        print("3", x.shape)
+        # print("3", x.shape)
         x = self.dropout(x)
         x = self.w2(x)
         out = self.softmax(x)
@@ -300,19 +302,16 @@ class Net(nn.Module):
         mlp_input = []
         zero_tensor = torch.zeros(2 * LSTM_SIZE, requires_grad=False).to(self.device)
         for i in range(len(configurations)):
-            print(
-                f"len of the configurations {len(configurations)}"
-            )  # for every sentence in the batch
+            # print(f"len of the configurations {len(configurations)}")  # for every sentence in the batch
             for j in configurations[i]:  # for each configuration of a sentence
-                print(f"len of the configurations {configurations[i]}")
-                print(f"len of the configurations {len(configurations[i])}")
+                # print(f"len of the configurations {configurations[i]}")
+                # print(f"len of the configurations {len(configurations[i])}")
                 mlp_input.append(
                     torch.cat(
                         [
                             zero_tensor if j[0] == -1 else h[j[0]][i],
                             zero_tensor if j[1] == -1 else h[j[1]][i],
                             zero_tensor if j[2] == -1 else h[j[2]][i],
-                            zero_tensor if j[3] == -1 else h[j[3]][i],
                         ]
                     )
                 )
@@ -360,7 +359,7 @@ class Net(nn.Module):
                 else:
                     conf.append(parser.buffer[0])
             configurations.append([conf])
-        print(f"configurations {configurations}")
+        # print(f"configurations {configurations}")
 
         return configurations
 
@@ -375,16 +374,20 @@ class Net(nn.Module):
     # is empty or a left arc if σ2 is the ROOT. For clarity sake we didn't implement
     # these checks in the parser so we must do them here. This renders the function quite ugly
     # 0 Lx; 1 Rx, 2 shifr; 3 reduce
-    def parse_step(self, parsers, moves):
+    def parse_step(self, parsers: List[ArcEager], moves):
         moves_argm = moves.argmax(-1)
 
         for i in range(len(parsers)):
+            noMove = False
             # Conditions
-            cond_left = len(parsers[i].stack) and parsers[i].stack[-1] != 0
-            cond_right = len(parsers[i].stack) > 0
-            cond_reduce = len(parsers[i].buffer) > 0 and len(parsers[i].stack[-1]) != 0
-            cond_shift = len(parsers[1].stack) > 0
-
+            cond_left = (
+                len(parsers[i].stack)
+                and len(parsers[i].buffer)
+                and parsers[i].stack[-1] != 0
+            )
+            cond_right = len(parsers[i].stack) and len(parsers[i].buffer)
+            cond_reduce = len(parsers[i].buffer) and parsers[i].stack[-1] != 0
+            cond_shift = len(parsers[i].buffer) > 0
             if parsers[i].is_tree_final():
                 continue
             else:
@@ -397,8 +400,10 @@ class Net(nn.Module):
                             parsers[i].right_arc()
                         elif cond_reduce:
                             parsers[i].reduce()
-                        else:
+                        elif cond_shift:
                             parsers[i].shift()
+                        else:
+                            noMove = True
                 if moves_argm[i] == 1:
                     if cond_right:
                         parsers[i].right_arc()
@@ -407,8 +412,10 @@ class Net(nn.Module):
                             parsers[i].reduce()
                         elif cond_right:
                             parsers[i].right_arc()
-                        else:
+                        elif cond_shift:
                             parsers[i].shift()
+                        else:
+                            noMove = True
                 if moves_argm[i] == 2:
                     if cond_shift:
                         parsers[i].shift()
@@ -417,8 +424,10 @@ class Net(nn.Module):
                             parsers[i].left_arc()
                         elif moves[i][0] < moves[i][1] and cond_right:
                             parsers[i].right_arc()
-                        else:
+                        elif cond_reduce:
                             parsers[i].reduce()
+                        else:
+                            noMove = True
                 if moves_argm[i] == 3:
                     if cond_reduce:
                         parsers[i].reduce()
@@ -427,11 +436,17 @@ class Net(nn.Module):
                             parsers[i].left_arc()
                         elif moves[i][0] < moves[i][1] and cond_right:
                             parsers[i].right_arc()
-                        else:
+                        elif cond_shift:
                             parsers[i].shift()
+                        else:
+                            noMove = True
+            if noMove:
+                print("noMoves")
+                exit(-5)
 
 
-# %%
+# %%model = model.to("xpu")
+
 model = Net(device).to(device)
 print(model)
 
@@ -501,8 +516,8 @@ optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
 
 for epoch in range(EPOCHS):
+    print("Starting Epoch", epoch)
     avg_train_loss = train(model, train_dataloader, criterion, optimizer)
-    input()
     val_uas = test(model, dev_dataloader)
 
     print(
