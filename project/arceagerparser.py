@@ -10,7 +10,7 @@ allowed only if top has no head.
 > left dependents are added bottom–up and right dependents top–down
 
 
-However, a fundamental problem 
+However, a fundamental problem 23
 with this system is that it does not guarantee that the output parse is a projective
 dependency tree, only a projective dependency forest, that is, 
 > a sequence of adjacent non-overlapping projective trees (Nivre 2008).
@@ -35,35 +35,47 @@ this problem has so far been lacking.
 
 
 class ArcEager:
-    def __init__(self, sentence):
+    def __init__(self, sentence, debug=False):
         self.sentence = sentence
         self.buffer = [i for i in range(len(self.sentence))]
         self.stack = []
         self.arcs = [-1 for _ in range(len(self.sentence))]
+        self.debug = debug
 
         # three shift moves to initialize the stack
         self.shift()
-        self.shift()
-        if len(self.sentence) > 2:
-            self.shift()
+        if self.debug:
+            print("end configuration")
 
     def left_arc(self):
         s1 = self.stack.pop()
         b1 = self.buffer[0]
         self.arcs[s1] = b1
+        if self.debug:
+            print("left arc")
+            self.print_configuration()
 
     def right_arc(self):
         s1 = self.stack[-1]
         b1 = self.buffer.pop(0)
         self.arcs[b1] = s1
         self.stack.append(b1)
+        if self.debug:
+            print("right arc")
+            self.print_configuration()
 
     def shift(self):
-        b1 = self.stack.pop(0)
+        b1 = self.buffer.pop(0)
         self.stack.append(b1)
+        if self.debug:
+            print("shift")
+            self.print_configuration()
 
     def reduce(self):
         self.stack.pop()
+        if self.debug:
+            print("reduce")
+            self.print_configuration()
 
     def is_tree_final(self):
         return len(self.stack) == 1 and len(self.buffer) == 0
@@ -72,6 +84,7 @@ class ArcEager:
         s = [self.sentence[i] for i in self.stack]
         b = [self.sentence[i] for i in self.buffer]
         print(s, b)
+        print(self.stack, self.buffer)
         print(self.arcs)
 
 
@@ -90,14 +103,17 @@ class Oracle:
 
     def is_left_arc_gold(self):
         # first element of the of the buffer is the gold head of the topmost element of the stack
-
-        if len(self.parser.stack) == 0 or len(self.parser.buffer) == 0:
+        # if empty lists or if top has no head -> return False
+        if (
+            len(self.parser.stack) == 0
+            or len(self.parser.buffer) == 0
+            or self.parser.stack[-1] == 0  # if top is ROOT
+        ):
             return False
 
-        o1 = self.parser.stack[-1]
-        o2 = self.parser.buffer[0]  # [0]
-
-        if self.gold[o2] == o1:
+        s = self.parser.stack[-1]
+        b = self.parser.buffer[0]  # [0]
+        if self.gold[s] == b:
             return True
 
         return False
@@ -107,24 +123,30 @@ class Oracle:
         if len(self.parser.stack) == 0 or len(self.parser.buffer) == 0:
             return False
 
-        o1 = self.parser.stack[-1]
-        o2 = self.parser.buffer[0]  # [0]
+        s = self.parser.stack[-1]
+        b = self.parser.buffer[0]  # [0]
 
-        if self.gold[o1] == o2:
+        if self.gold[b] == s:
             return True
 
         return False
 
     def is_reduce_gold(self):
-        # if topmost stack element has got head
+        # stack empty  || top no head --> return False
         if len(self.parser.stack) == 0:
             return False
+        if len(self.parser.buffer) == 0:
+            if self.parser.arcs[self.parser.stack[-1]] != -1:
+                return True
+            return False
+        # if exist a link k <-/-> next, k < top then return REDUCE
 
-        o1 = self.parser.stack[-1]
+        b = self.parser.buffer[0]
+        for i in range(0, len(self.parser.stack) - 1):
+            s = self.parser.stack[i]
 
-        if self.gold[o1] != -1:
-            return True
-
+            if self.gold[s] == b or self.gold[b] == s:
+                return True
         return False
 
     def is_shift_gold(self):
@@ -141,7 +163,30 @@ class Oracle:
 if __name__ == "__main__":
     from datasets import load_dataset
 
-    dataset = load_dataset("universal_dependencies", "en_lines", split="train")
-    print(len(dataset))
-
+    sentence = ["<ROOT>", "Their", "point", "has", "been", "made", "."]
+    gold = [-1, 2, 5, 5, 5, 0, 5]
+    # sentence = ["<ROOT>", "He", "began", "to", "write", "again", "."]
+    # gold = [-1, 2, 0, 4, 2, 4, 2]
+    sentence = ["<ROOT>", "Chart", "with", "category", "field"]
+    gold = [-1, 0, 4, 4, 1]
+    parser = ArcEager(sentence)
+    oracle = Oracle(parser, gold)
+    c = 0
+    while not parser.is_tree_final():
+        print(c)
+        c += 1
+        if oracle.is_left_arc_gold():
+            parser.left_arc()
+        elif oracle.is_right_arc_gold():
+            parser.right_arc()
+        elif oracle.is_reduce_gold():
+            parser.reduce()
+        elif oracle.is_shift_gold():
+            parser.shift()
+        else:
+            print("error")
+            break
+        parser.print_configuration()
+        print(gold)
+        input()
     # TODO implement test to check if  oracle and parser are correct
