@@ -440,13 +440,12 @@ class Net(nn.Module):
                             parsers[i].shift()
                         else:
                             noMove = True
-            if noMove:
-                print("noMoves")
-                exit(-5)
+            # if noMove:
+            #     print("noMoves")
+            # exit(-5)
 
 
 # %%model = model.to("xpu")
-
 model = Net(device).to(device)
 print(model)
 
