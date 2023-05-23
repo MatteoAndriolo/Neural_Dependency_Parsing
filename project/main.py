@@ -183,7 +183,7 @@ def prepare_batch(batch_data, get_gold_path=False):
     return sentences, paths, moves, trees
 
 
-BATCH_SIZE = 32
+BATCH_SIZE = 32 #GPU at 80% with 32 batch size
 
 train_dataloader = tutils.data.DataLoader(  # type:ignore
     train_dataset,
@@ -214,8 +214,8 @@ LSTM_LAYERS = 2  # It was 1 before
 MLP_SIZE = 200
 CLASSES = 4
 DROPOUT = 0.2
-EPOCHS = 15
-LR = 0.002  # learning rate
+EPOCHS = 30
+LR = 0.001  # learning rate
 
 
 class Net(nn.Module):
@@ -391,17 +391,16 @@ class Net(nn.Module):
                 continue
             else:
                 if moves_argm[i] == 0:
-                    #print("left")
 #------------------------------ firdt condition to check is the left arc -> right arc -> shift -> reduce------------------------------
                     if cond_left:
                         parsers[i].left_arc()
                     else:
                         if cond_right:
                             parsers[i].right_arc()
-                        elif cond_reduce:
-                            parsers[i].reduce()
                         elif cond_shift:
                             parsers[i].shift()
+                        elif cond_reduce:
+                            parsers[i].reduce()
                         else:
                             print("noMove was possible on left")
 #------------------------------ firdt condition to check is the right arc -> shift -> reduce------------------------------
@@ -410,26 +409,24 @@ class Net(nn.Module):
                     if cond_right:
                         parsers[i].right_arc()
                     else:
-                        if cond_reduce:
-                            parsers[i].reduce()
-                        elif cond_shift:
+                        if cond_shift:
                             parsers[i].shift()
+                        elif cond_reduce:
+                            parsers[i].reduce() 
                         else:
                             print("noMove was possible on right")
 #------------------------------ firdt condition to check is the shift -> reduce------------------------------
                 if moves_argm[i] == 2:
-                    #print("reduce")
-                    if cond_reduce:
-                        parsers[i].reduce()
-                    elif cond_shift:
+                    if cond_shift:
                         parsers[i].shift()
+                    elif cond_reduce:
+                        parsers[i].reduce()
                     else:
                         print("noMove was possible on shift")
 #------------------------------ firdt condition to check is the reduce and if no reduce was possible take in account the probabilities ------------------------------
                 if moves_argm[i] == 3:
-                    #print("shift")
-                    if cond_shift:
-                        parsers[i].shift()
+                    if cond_reduce:
+                        parsers[i].reduce()
                     else:
                         if moves[i][0] > moves[i][1] and moves[i][0] > moves[i][2] and cond_left:
                             parsers[i].left_arc()
@@ -437,8 +434,8 @@ class Net(nn.Module):
                             if moves[i][1] > moves[i][2] and cond_right:
                                 parsers[i].right_arc()
                             else:
-                                if cond_reduce:
-                                    parsers[i].reduce()
+                                if cond_shift:
+                                    parsers[i].shift()
                                 else:
                                     print(moves[i][0], moves[i][1], moves[i][2], cond_left, cond_right, cond_shift)
                     
@@ -524,7 +521,10 @@ for epoch in range(EPOCHS):
             epoch, avg_train_loss, val_uas
         )
     )
+    #save the model on pytorch format
+    
 
 # %%
 test_uas = test(model, test_dataloader)
 print("test_uas: {:5.3f}".format(test_uas))
+torch.save(model.state_dict(), "model.pt")
