@@ -210,12 +210,12 @@ test_dataloader = tutils.data.DataLoader(  # type:ignore
 # %%
 EMBEDDING_SIZE = 200
 LSTM_SIZE = 200
-LSTM_LAYERS = 1  # It was 1 before
+LSTM_LAYERS = 2  # It was 1 before
 MLP_SIZE = 200
 CLASSES = 4
 DROPOUT = 0.2
 EPOCHS = 15
-LR = 0.001  # learning rate
+LR = 0.002  # learning rate
 
 
 class Net(nn.Module):
@@ -376,7 +376,6 @@ class Net(nn.Module):
     # 0 Lx; 1 Rx, 2 shifr; 3 reduce
     def parse_step(self, parsers: List[ArcEager], moves):
         moves_argm = moves.argmax(-1)
-
         for i in range(len(parsers)):
             noMove = False
             # Conditions
@@ -386,13 +385,14 @@ class Net(nn.Module):
                 and parsers[i].stack[-1] != 0
             )
             cond_right = len(parsers[i].stack) and len(parsers[i].buffer)
-            cond_reduce = len(parsers[i].buffer) and parsers[i].stack[-1] != 0
+            cond_reduce = len(parsers[i].stack) and parsers[i].stack[-1] != 0
             cond_shift = len(parsers[i].buffer) > 0
             if parsers[i].is_tree_final():
                 continue
             else:
                 if moves_argm[i] == 0:
-                    # can do left if there is an element in stack and buffer, stack not root
+                    #print("left")
+#------------------------------ firdt condition to check is the left arc -> right arc -> shift -> reduce------------------------------
                     if cond_left:
                         parsers[i].left_arc()
                     else:
@@ -403,46 +403,46 @@ class Net(nn.Module):
                         elif cond_shift:
                             parsers[i].shift()
                         else:
-                            noMove = True
+                            print("noMove was possible on left")
+#------------------------------ firdt condition to check is the right arc -> shift -> reduce------------------------------
                 if moves_argm[i] == 1:
+                    #print("right")
                     if cond_right:
                         parsers[i].right_arc()
                     else:
                         if cond_reduce:
                             parsers[i].reduce()
-                        elif cond_right:
-                            parsers[i].right_arc()
                         elif cond_shift:
                             parsers[i].shift()
                         else:
-                            noMove = True
+                            print("noMove was possible on right")
+#------------------------------ firdt condition to check is the shift -> reduce------------------------------
                 if moves_argm[i] == 2:
+                    #print("reduce")
+                    if cond_reduce:
+                        parsers[i].reduce()
+                    elif cond_shift:
+                        parsers[i].shift()
+                    else:
+                        print("noMove was possible on shift")
+#------------------------------ firdt condition to check is the reduce and if no reduce was possible take in account the probabilities ------------------------------
+                if moves_argm[i] == 3:
+                    #print("shift")
                     if cond_shift:
                         parsers[i].shift()
                     else:
-                        if moves[i][0] > moves[i][1] and cond_left:
+                        if moves[i][0] > moves[i][1] and moves[i][0] > moves[i][2] and cond_left:
                             parsers[i].left_arc()
-                        elif moves[i][0] < moves[i][1] and cond_right:
-                            parsers[i].right_arc()
-                        elif cond_reduce:
-                            parsers[i].reduce()
                         else:
-                            noMove = True
-                if moves_argm[i] == 3:
-                    if cond_reduce:
-                        parsers[i].reduce()
-                    else:
-                        if moves[i][0] > moves[i][1] and cond_left:
-                            parsers[i].left_arc()
-                        elif moves[i][0] < moves[i][1] and cond_right:
-                            parsers[i].right_arc()
-                        elif cond_shift:
-                            parsers[i].shift()
-                        else:
-                            noMove = True
-            # if noMove:
-            #     print("noMoves")
-            # exit(-5)
+                            if moves[i][1] > moves[i][2] and cond_right:
+                                parsers[i].right_arc()
+                            else:
+                                if cond_reduce:
+                                    parsers[i].reduce()
+                                else:
+                                    print(moves[i][0], moves[i][1], moves[i][2], cond_left, cond_right, cond_shift)
+                    
+
 
 
 # %%model = model.to("xpu")
