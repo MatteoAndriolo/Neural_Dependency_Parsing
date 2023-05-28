@@ -1,17 +1,3 @@
-# %% [markdown]
-# ### The "Auto" Classes of Hugginface
-#
-# *  The first thing that we need to do is to download a pretrained model and its tokenizer
-# * We need to use the classes
-#   * ```AutoModel```
-#   *  ```AutoTokenizer```
-# * We can load both using the ```from_pretrained``` function
-# * The opposite function is the ```save_pretrained``` function, which can be used to save a model to disk
-#
-#
-#
-
-# %%
 from transformers import AutoTokenizer, AutoModel
 
 ## Encoder-only models
@@ -26,23 +12,10 @@ tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 #   1. Preprocesses the text and tokenizes it in subwords
 #   2. Associates to every subword an ```input_id``` which is used to fetch its embedding in the embedding layer (or layer 0)
 #   3. Adds ```attention_mask``` and ```token_type_ids```
-string = "I love tokenization"
-print(string)
-print(tokenizer(string))
 
 # After tokenizing into subwords, each subword is associated to a ```input_id``` which tells the model which embedding to get for that subword
 # You can think of it as a row index in the embedding matrix
 #  * love ➡️ 2293 ➡️ get embedding in row 2293
-
-print(tokenizer.tokenize(string, add_special_tokens=True))
-
-output = tokenizer(string)
-print(tokenizer.convert_ids_to_tokens(output["input_ids"]))
-# ['[CLS]', 'i', 'love', 'token', '##ization', '[SEP]']
-
-output = tokenizer(string)
-print(tokenizer.decode(output["input_ids"]))
-# '[CLS] i love tokenization [SEP]'
 
 
 # %% The ATTENTION MASK
@@ -50,19 +23,7 @@ print(tokenizer.decode(output["input_ids"]))
 # If the sentences are in the same batch, the shortest one needs to be padded: we need to append [PAD] tokens to the shortest sentence so that they have the same length
 # * However, we don't want the self-attention to operate over the [PAD] tokens
 # * tokenizers handles all of this for us
-#
-#
 
-sentences = ["I love tokenization", "I really like the city of Padua"]
-output = tokenizer(sentences, padding=True, return_tensors="pt")
-
-print(output["input_ids"])
-print(output["attention_mask"])
-
-print(tokenizer.convert_ids_to_tokens(output["input_ids"][0]))
-print(tokenizer.convert_ids_to_tokens(output["input_ids"][1]))
-
-# %% [markdown]
 # The ```token_type_ids```
 #
 # Recall that the input embeddings to a transformers are the result of a sum of three elements:
@@ -70,27 +31,10 @@ print(tokenizer.convert_ids_to_tokens(output["input_ids"][1]))
 # * Positional embeddings: this are sinusoidal or learned and give the transformer the position information
 # * Segment embeddings: when we are doing sentence-pair tasks, i.e. the input consists of $ [CLS] \; seq_A \; [SEP] \; seq_B \; [SEP]$, we may want to add to each embedding the information on the originating sentence
 
-output = tokenizer(
-    "The sun is shining today", "Today it's rainy"
-)  # sentence-pair tokenization
-print(output)
-
-print(tokenizer.decode(output["input_ids"]))
-
-output_single_sent = tokenizer(
-    ["The sun is shining today", "Today it's rainy"]
-)  # single-sentence tasks
-output_sent_pair = tokenizer(
-    "The sun is shining today", "Today it's rainy"
-)  # sentence-pair tasks
-
-print(tokenizer.batch_decode(output_single_sent["input_ids"]))
-print(tokenizer.decode(output_sent_pair["input_ids"]))
-
 # %% [markdown]
 # ### The transformer model in Huggingface
 
-# model = AutoModel.from_pretrained("bert-base-uncased")
+model = AutoModel.from_pretrained("bert-base-uncased")
 
 model
 
