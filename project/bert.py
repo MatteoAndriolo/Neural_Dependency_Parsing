@@ -360,7 +360,7 @@ with open("bert.log", "w") as f:
         avg_train_loss = train(model, train_dataloader, criterion, optimizer)
         val_uas = test(model, validation_dataloader)
 
-        log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |"
+        log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |\n"
         print(log)
         f.write(log)
 
@@ -369,7 +369,7 @@ with open("bert.log", "w") as f:
         #torch.load(f"model_e{epoch}.pt")
 
     test_uas = test(model, test_dataloader)
-    log = "test_uas: {:5.3f}".format(test_uas)
+    log = f"test_uas: {test_uas:5.3f}"
     print(log)
     f.write(log + "\n")
 
