@@ -18,71 +18,7 @@ torch.manual_seed(99)
 
 
 # %%
-def is_projective(tree):
-    for i in range(len(tree)):
-        if tree[i] == -1:
-            continue
-        left = min(i, tree[i])
-        right = max(i, tree[i])
-
-        for j in range(0, left):
-            if tree[j] > left and tree[j] < right:
-                return False
-        for j in range(left + 1, right):
-            if tree[j] < left or tree[j] > right:
-                return False
-        for j in range(right + 1, len(tree)):
-            if tree[j] > left and tree[j] < right:
-                return False
-
-    return True
-
-
-def generate_gold_path(sentence:List[str], gold:List[int]) -> tuple[List[List[int]], List[int]]:
-  '''
-  sentence: list of tokens
-  gold: list of heads
-  '''
-  parser = ArcEager(sentence)
-  oracle = Oracle(parser, gold)
-
-  gold_configurations:List[List[int]] = []
-  gold_moves:List[int] = []
-
-  while not parser.is_tree_final():
-      # save configuration - index of token in sentence
-      configuration = [
-          parser.stack[ - 1],
-      ]
-      if len(parser.buffer) == 0:
-          configuration.append(-1)
-      else:
-          configuration.append(parser.buffer[0])
-      
-      # save configuration    
-      gold_configurations.append(configuration)
-
-          # save gold move
-      if oracle.is_left_arc_gold():
-          gold_moves.append(0)
-          parser.left_arc()
-      elif oracle.is_right_arc_gold():
-          gold_moves.append(1)
-          parser.right_arc()
-      elif oracle.is_shift_gold():
-          gold_moves.append(2)
-          parser.shift()
-      elif oracle.is_reduce_gold():
-          gold_moves.append(3)
-          parser.reduce()
-  
-  return gold_configurations, gold_moves, 
-
-## ----------- BiLSTM ----------------------------------
-
-
-
-# ----------------- BERT ------------------------------------------------
+from utils import is_projective, generate_gold_pathmoves 
 
 def match_subtokens(l1:List[str], l2:List[str]):
     # Create output list
@@ -100,8 +36,6 @@ def match_subtokens(l1:List[str], l2:List[str]):
         output.append(subtoken_indices)
     return output
 
-
-  
 def tokens_tokenizer_correspondence(tokens:List[List[str]], berttokens:List[List[int]]):
     global tokenizer
     correspondences:List[List[List[int]]]=[]
@@ -109,6 +43,8 @@ def tokens_tokenizer_correspondence(tokens:List[List[str]], berttokens:List[List
     for t,bt in zip(tokens, berttokens):
         correspondences.append(match_subtokens(t, list(tokenizer.convert_ids_to_tokens(bt))))
     return correspondences
+
+
 def get_configurations(toks:List[List[str]], heads:List[List[int]], get_gold_path=False):
   '''
   toks: list of list of tokens
@@ -132,7 +68,7 @@ def get_configurations(toks:List[List[str]], heads:List[List[int]], get_gold_pat
       head = [-1] + list(map(int,head))
 
       if get_gold_path:  # only for training
-          conf, mov=generate_gold_path(tokens, head)
+          conf, mov=generate_gold_pathmoves(tokens, head)
           
           
       gold_configurations.append(conf)
@@ -143,27 +79,42 @@ def get_configurations(toks:List[List[str]], heads:List[List[int]], get_gold_pat
   
 
 def prepare_batch(batch_data,get_gold_path=False):
-    print(f"batch data type {type(batch_data)}")
-    tok_sentences= tokenizer(["<ROOT> "+bd["text"] for bd in batch_data], padding=True, return_tensors="pt", add_special_tokens=False ) # FIXME : add ROOT token
-    configurations, moves, gold = get_configurations(
+    '''
+    :param batch_data: batch from dataloader
+    :param get_gold_path: if True, return gold path and moves
+    
+    :return: tokenizer()
+    :return: configurations
+    :return: moves
+    :return: heads
+    :return: correspondences
+    '''
+    # Extract embeddings
+    tok_sentences= tokenizer(
+        ["<ROOT> "+bd["text"] for bd in batch_data],
+        padding=True, 
+        return_tensors="pt",
+        add_special_tokens=False 
+    )
+
+    # get gold path and moves
+    configurations, moves, head = get_configurations(
         [bd["tokens"] for bd in batch_data],
         [bd["head"] for bd in batch_data],
-        get_gold_path) 
+        get_gold_path
+    )
+    
+    # get correspondences between tokens and bert tokens (subword)
     correspondences=tokens_tokenizer_correspondence(
         [["<ROOT>"]+bd["tokens"] for bd in batch_data],
-        tok_sentences["input_ids"])  # type: ignore 
+        tok_sentences["input_ids"]  # type: ignore 
+    )
 
-    return tok_sentences, configurations, moves, gold, correspondences
+    return tok_sentences, configurations, moves, head, correspondences
 
 
 
 
-# %%
-# processed_sample = tokenizer(train_dataset["text"]) # input_ids token_type_ids attention_mask
-
-# processed_sample.update(get_oracledata(train_dataset["tokens"], train_dataset["head"])) # configurations moves
-
-# processed_sample.keys()
 
 # %%
 from datasets import load_dataset
@@ -467,63 +418,71 @@ model = model.to(device)
 # 
 
 # %%
+from utils import evaluate
+
 def train(model:BERTNet, dataloader, criterion, optimizer):
     model.train()  # setup model for training mode
     total_loss = 0
     count = 0
+    
     for batch in dataloader:
+        print(f"TRAINING: batch {count}/{len(dataloader)/BATCH_SIZE:.0f}")
         optimizer.zero_grad()
-        sentences, paths, moves, trees, correspondences = batch
+        sentences, paths, moves, _, correspondences = batch
+
         out = model(sentences, paths, correspondences)
-        ##out = model(input_ids=sentences['input_ids'].to(device), 
-        ##    attention_mask=sentences['attention_mask'].to(device), 
-        ##    paths)
 
         labels = torch.tensor(sum(moves, [])).to(
             device
         )  # sum(moves, []) flatten the array
+
         loss = criterion(out, labels)
-        count += 1
         total_loss += loss.item()
         loss.backward()
         optimizer.step()
+        count += 1
+
     return total_loss / count
 
-def evaluate(gold:List[List[int]], preds:List[List[int]]):
-    total = 0
-    correct = 0
-    for g, p in zip(gold, preds):
-        for i in range(1, len(g)):
-            total += 1
-            if g[i] == p[i]:
-                correct += 1
-    return correct / total
 
-def test(model, dataloader:torch.utils.data.DataLoader):
+def test(model:BERTNet, dataloader:torch.utils.data.DataLoader): #type:ignore
     model.eval()
+    
     gold = []
     preds = []
+
     for batch in dataloader:
-        sentences, paths, moves, trees, correspondences = batch
+        sentences, _ , _ , head, _ = batch
+        
         with torch.no_grad():
             pred = model.infere(sentences )
-            gold += trees
+            gold += head
             preds += pred
+
     return evaluate(gold, preds)
 
+# %%
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-with open("bert.log", "w") as logbert:
+
+with open("bert.log", "w") as f:
     for epoch in range(EPOCHS):
         print("Starting Epoch", epoch)
         avg_train_loss = train(model, train_dataloader, criterion, optimizer)
-        print("AvgTrainLoss", avg_train_loss)
-        torch.save(model.state_dict(), f"bert_e{epoch+1}.pt")
-        #torch.load(f"model_e{epoch}.pt")
         val_uas = test(model, validation_dataloader)
+
         log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |"
         print(log)
-        logbert.write(log)
+        f.write(log)
+
+        torch.save(model.state_dict(), f"bert_e{epoch+1}.pt")
+        #torch.load(f"bert_e{epoch}.pt")
+        
         #save the model on pytorch format
+    test_uas = test(model, test_dataloader)
+    log="test_uas: {:5.3f}".format(test_uas)
+    print(log)
+    f.write(log+"\n")
+
 

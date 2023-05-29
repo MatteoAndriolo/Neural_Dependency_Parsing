@@ -6,21 +6,21 @@ from typing import List
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 torch.manual_seed(99)
+BATCH_SIZE=32
 
 
 # %% [markdown]
 # # Data
 # 
 
-# %%
-from arceagerparser import ArcEager, Oracle
+# %% 
+from utils import generate_gold_pathmoves, is_projective
 
 def create_dictionary(dataset, threshold=3):
     '''
-    :param dataset: list of samples
+    :param dataset: list of list of tokens samples
     :param threshold: minimum number of appearances of a word in the dataset
     :return: a dictionary of word/index pairs
-    
     '''
     dic = {}  # dictionary of word counts
     for sample in dataset:
@@ -43,12 +43,19 @@ def create_dictionary(dataset, threshold=3):
 
     return map
 
-def process_sample(sample, emb_dictionary, get_gold_path=False):
-    # put sentence and gold tree in our format
-    sentence = ["<ROOT>"] + sample["tokens"]
-    gold = [-1] + [
-        int(i) for i in sample["head"]
-    ]  # heads in the gold tree are strings, we convert them to int
+def process_sample(tokens, emb_dictionary, get_gold_path=False):
+    '''
+    Process a sample from the dataset 
+    :param         tokens: tokens of a sentence
+    :param emb_dictionary: dictionary of word/index pairs
+    :param  get_gold_path: if True, we also return the gold path and gold moves
+    :return: enc_sentence: encoded tokens of the sentence
+                gold_path: gold path of the sentence
+               gold_moves: gold moves of the sentence
+                     gold: gold heads of the sentence
+    '''
+    sentence = ["<ROOT>"] + tokens["tokens"]
+    head = [-1] + list(map(int, tokens["head"])) #[int(i) for i in tokens["head"]]  
 
     # embedding ids of sentence words
     enc_sentence = [
@@ -56,109 +63,36 @@ def process_sample(sample, emb_dictionary, get_gold_path=False):
         for word in sentence
     ]
 
-    # gold_path and gold_moves are parallel arrays whose elements refer to parsing steps
-    gold_path = (
-        []
-    )  # record two topmost stack tokens and first buffer token for current step
-    gold_moves = (
-        []
-    )  # contains oracle (canonical) move for current step: 0 is left, 1 right, 2 shift, 3 reduce
+    gold_path, gold_moves= [], [] if not get_gold_path else generate_gold_pathmoves(sentence, head)
 
-    if get_gold_path:  # only for training
-        parser = ArcEager(sentence)
-        oracle = Oracle(parser, gold)
-
-        while not parser.is_tree_final():
-            # save configuration
-            configuration = [
-                parser.stack[len(parser.stack) - 2],
-                parser.stack[len(parser.stack) - 1],
-            ]
-            if len(parser.buffer) == 0:
-                configuration.append(-1)
-            else:
-                configuration.append(parser.buffer[0])
-            gold_path.append(configuration)
-
-            # save gold move
-            if oracle.is_left_arc_gold():
-                gold_moves.append(0)
-                parser.left_arc()
-            elif oracle.is_right_arc_gold():
-                gold_moves.append(1)
-                parser.right_arc()
-            elif oracle.is_shift_gold():
-                gold_moves.append(2)
-                parser.shift()
-            elif oracle.is_reduce_gold():
-                gold_moves.append(3)
-                parser.reduce()
-
-    # print("enc_sentence", len(enc_sentence))
-    # print("gold_path", len(gold_path))
-    # print("gold_moves", len(gold_moves))
-    # print("gold", len(gold))
-    return enc_sentence, gold_path, gold_moves, gold
-
-def is_projective(tree):
-    for i in range(len(tree)):
-        if tree[i] == -1:
-            continue
-        left = min(i, tree[i])
-        right = max(i, tree[i])
-
-        for j in range(0, left):
-            if tree[j] > left and tree[j] < right:
-                return False
-        for j in range(left + 1, right):
-            if tree[j] < left or tree[j] > right:
-                return False
-        for j in range(right + 1, len(tree)):
-            if tree[j] > left and tree[j] < right:
-                return False
-
-    return True
+    return enc_sentence, gold_path, gold_moves, head
 
 
-def generate_gold_path(sentence:List[str], gold:List[int]) -> tuple[List[List[int]], List[int]]:
-  '''
-  sentence: list of tokens
-  gold: list of heads
-  '''
-  parser = ArcEager(sentence)
-  oracle = Oracle(parser, gold)
+def prepare_batch(batch_data, get_gold_path=False):
+    '''
+    :param batch_data: batch from dataloader
+    :param get_gold_path: if True, we also return the gold path and gold moves
+    
+    :return: sentences: list of encoded sentences
+    :return     paths: list of gold paths
+    :return     moves: list of gold moves
+    :return     heads: list of gold heads
+    '''
+    data = [
+        process_sample(s, emb_dictionary, get_gold_path=get_gold_path)
+        for s in batch_data
+    ]
+    # sentences, paths, moves, trees are parallel arrays, each element refers to a sentence
+    sentences = [s[0] for s in data]
+    paths = [s[1] for s in data]
+    moves = [s[2] for s in data]
+    heads = [s[3] for s in data]
+    # print(f"sentences{len(sentences[0])}")
+    # print(f"paths{len(paths[0])}")
+    # print("moves", len(moves[0]))
+    # print("trees", len(trees[0]))
+    return sentences, paths, moves, heads
 
-  gold_configurations:List[List[int]] = []
-  gold_moves:List[int] = []
-
-  while not parser.is_tree_final():
-      # save configuration - index of token in sentence
-      configuration = [
-          parser.stack[ - 1],
-      ]
-      if len(parser.buffer) == 0:
-          configuration.append(-1)
-      else:
-          configuration.append(parser.buffer[0])
-      
-      # save configuration    
-      gold_configurations.append(configuration)
-
-          # save gold move
-      if oracle.is_left_arc_gold():
-          gold_moves.append(0)
-          parser.left_arc()
-      elif oracle.is_right_arc_gold():
-          gold_moves.append(1)
-          parser.right_arc()
-      elif oracle.is_shift_gold():
-          gold_moves.append(2)
-          parser.shift()
-      elif oracle.is_reduce_gold():
-          gold_moves.append(3)
-          parser.reduce()
-  
-  return gold_configurations, gold_moves, 
 
 
 # %% [markdown]
@@ -169,74 +103,46 @@ def generate_gold_path(sentence:List[str], gold:List[int]) -> tuple[List[List[in
 from datasets import load_dataset
 
 train_dataset = load_dataset("universal_dependencies", "en_lines", split="train")
-dev_dataset = load_dataset("universal_dependencies", "en_lines", split="validation")
+validation_dataset = load_dataset("universal_dependencies", "en_lines", split="validation")
 test_dataset = load_dataset("universal_dependencies", "en_lines", split="test")
-print(len(train_dataset))  # type: ignore
-print(len(dev_dataset))  # type: ignore
-print(len(test_dataset))  # type: ignore
+# print length of datasets
+print(f"train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}") #type:ignore
+
+train_dataset = train_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head'])))) 
+validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
+test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
+print(f"PROJECTIVE -> train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}") #type:ignore
 
 
-# %%
-# Remove non projective trees
-train_dataset = [
-    sample
-    for sample in train_dataset
-    if is_projective([-1] + [int(head) for head in sample["head"]])  # type: ignore
-]
-
-# %%
-# create the embedding dictionary
 emb_dictionary = create_dictionary(train_dataset)
-print(len(train_dataset))
-print(len(dev_dataset))  # type: ignore
-print(len(test_dataset))  # type: ignore
-
+print(f"len(emb_dictionary): {len(emb_dictionary)}")
 # %% [markdown]
 # ## DataLoaders
 #
 
 # %%
-from functools import partial
-
-
-def prepare_batch(batch_data, get_gold_path=False):
-    data = [
-        process_sample(s, emb_dictionary, get_gold_path=get_gold_path)
-        for s in batch_data
-    ]
-    # sentences, paths, moves, trees are parallel arrays, each element refers to a sentence
-    sentences = [s[0] for s in data]
-    paths = [s[1] for s in data]
-    moves = [s[2] for s in data]
-    trees = [s[3] for s in data]
-    # print(f"sentences{len(sentences[0])}")
-    # print(f"paths{len(paths[0])}")
-    # print("moves", len(moves[0]))
-    # print("trees", len(trees[0]))
-    return sentences, paths, moves, trees
-
-
 BATCH_SIZE = 32 #GPU at 80% with 32 batch size
 
 train_dataloader = torch.utils.data.DataLoader(  # type:ignore
     train_dataset,
     batch_size=BATCH_SIZE,
     shuffle=True,
-    collate_fn=partial(prepare_batch, get_gold_path=True),
+    collate_fn=lambda x: prepare_batch(x, get_gold_path=True),
 )
 dev_dataloader = torch.utils.data.DataLoader(  # type: ignore
-    dev_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=partial(prepare_batch)
+    validation_dataset,
+    batch_size=BATCH_SIZE,
+    shuffle=False,
+    collate_fn=lambda x: prepare_batch(x, get_gold_path=True),
 )
 test_dataloader = torch.utils.data.DataLoader(  # type:ignore
     test_dataset,
     batch_size=BATCH_SIZE,
     shuffle=False,
-    collate_fn=partial(prepare_batch),
+    collate_fn=lambda x: prepare_batch(x, get_gold_path=False),
 )
 
 # %% [markdown]
-# ---
-#
 # # BiLSTM
 #
 
@@ -250,7 +156,7 @@ DROPOUT = 0.2
 EPOCHS = 30
 LR = 0.001  # learning rate
 
-
+from arceagerparser import ArcEager, Oracle
 class BiLSTMNet(nn.Module):
     def __init__(self, device):
         super(BiLSTMNet, self).__init__()
@@ -479,56 +385,49 @@ model = BiLSTMNet(device).to(device)
 print(model)
 
 
-# %%
-def evaluate(gold, preds):
-    total = 0
-    correct = 0
-
-    for g, p in zip(gold, preds):
-        for i in range(1, len(g)):
-            total += 1
-            if g[i] == p[i]:
-                correct += 1
-
-    return correct / total
 
 
 # %%
-def train(model, dataloader, criterion, optimizer):
+from utils import evaluate
+
+
+def train(model:BiLSTMNet, dataloader, criterion, optimizer):
     model.train()  # setup model for training mode
     total_loss = 0
     count = 0
+
     for batch in dataloader:
+        print(f"TRAINING: batch {count}/{len(dataloader)/BATCH_SIZE:.0f}")
         optimizer.zero_grad()
-        sentences, paths, moves, trees = batch
+        sentences, paths, moves, _ = batch
 
         out = model(sentences, paths)
+
         labels = torch.tensor(sum(moves, [])).to(
             device
         )  # sum(moves, []) flatten the array
+
         loss = criterion(out, labels)
-
-        count += 1
         total_loss += loss.item()
-
         loss.backward()
         optimizer.step()
+        count += 1
 
     return total_loss / count
 
 
-def test(model, dataloader):
+def test(model:BiLSTMNet, dataloader:torch.utils.data.DataLoader): #type:ignore
     model.eval()
 
     gold = []
     preds = []
 
     for batch in dataloader:
-        sentences, paths, moves, trees = batch
+        sentences, _, _, head = batch
+
         with torch.no_grad():
             pred = model.infere(sentences)
-
-            gold += trees
+            gold += head
             preds += pred
 
     return evaluate(gold, preds)
@@ -540,20 +439,21 @@ criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
 
-for epoch in range(EPOCHS):
-    print("Starting Epoch", epoch)
-    avg_train_loss = train(model, train_dataloader, criterion, optimizer)
-    val_uas = test(model, dev_dataloader)
+with open("bilstm.log", "w") as f:
+    for epoch in range(EPOCHS):
+        print("Starting Epoch", epoch)
+        avg_train_loss = train(model, train_dataloader, criterion, optimizer)
+        val_uas = test(model, dev_dataloader)
 
-    print(
-        "Epoch: {:3d} | avg_train_loss: {:5.3f} | dev_uas: {:5.3f} |".format(
-            epoch, avg_train_loss, val_uas
-        )
-    )
-    #save the model on pytorch format
-    
+        log=f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:5.3f} | dev_uas: {val_uas:5.3f} |"
+        print(log)
+        f.write(log+"\n")
+        #save the model on pytorch format
+        torch.save(model.state_dict(), f"bilstm_e{epoch+1}.pt")
+        #torch.load(f"bilstm_e{epoch+1}.pt")
 
-test_uas = test(model, test_dataloader)
-print("test_uas: {:5.3f}".format(test_uas))
-torch.save(model.state_dict(), "model.pt")
-
+    test_uas = test(model, test_dataloader)
+    log="test_uas: {:5.3f}".format(test_uas)
+    print(log)
+    f.write(log+"\n")
+        
