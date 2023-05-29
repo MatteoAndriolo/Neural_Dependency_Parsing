@@ -6,7 +6,6 @@ from typing import List
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 torch.manual_seed(99)
-BATCH_SIZE = 32
 
 
 # %% [markdown]
@@ -65,9 +64,11 @@ def process_sample(tokens, emb_dictionary, get_gold_path=False):
         for word in sentence
     ]
 
-    gold_path, gold_moves = [], [] if not get_gold_path else generate_gold_pathmoves(
-        sentence, head
-    )
+
+    if get_gold_path:
+        gold_path, gold_moves = generate_gold_pathmoves(sentence, head)
+    else:
+        gold_path, gold_moves = [], [] 
 
     return enc_sentence, gold_path, gold_moves, head
 
@@ -91,10 +92,6 @@ def prepare_batch(batch_data, get_gold_path=False):
     paths = [s[1] for s in data]
     moves = [s[2] for s in data]
     heads = [s[3] for s in data]
-    # print(f"sentences{len(sentences[0])}")
-    # print(f"paths{len(paths[0])}")
-    # print("moves", len(moves[0]))
-    # print("trees", len(trees[0]))
     return sentences, paths, moves, heads
 
 
@@ -136,7 +133,22 @@ print(f"len(emb_dictionary): {len(emb_dictionary)}")
 #
 
 # %%
-BATCH_SIZE = 32  # GPU at 80% with 32 batch size
+# %% [markdown]
+# # BiLSTM
+#
+
+# %%
+BATCH_SIZE = 32
+EMBEDDING_SIZE = 200
+LSTM_SIZE = 200
+LSTM_LAYERS = 2  # It was 1 before
+MLP_SIZE = 200
+CLASSES = 4
+DROPOUT = 0.2
+EPOCHS = 30
+LR = 0.001  # learning rate
+
+#%%
 
 train_dataloader = torch.utils.data.DataLoader(  # type:ignore
     train_dataset,
@@ -157,23 +169,10 @@ test_dataloader = torch.utils.data.DataLoader(  # type:ignore
     collate_fn=lambda x: prepare_batch(x, get_gold_path=False),
 )
 
-# %% [markdown]
-# # BiLSTM
-#
 
-# %%
-EMBEDDING_SIZE = 200
-LSTM_SIZE = 200
-LSTM_LAYERS = 2  # It was 1 before
-MLP_SIZE = 200
-CLASSES = 4
-DROPOUT = 0.2
-EPOCHS = 30
-LR = 0.001  # learning rate
+#%%
 from arceagerparser import ArcEager, Oracle
 from utils import parse_step
-
-
 class BiLSTMNet(nn.Module):
     def __init__(self, device):
         super(BiLSTMNet, self).__init__()
@@ -194,7 +193,7 @@ class BiLSTMNet(nn.Module):
         )
 
         # initialize feedforward
-        self.w1 = nn.Linear(6 * LSTM_SIZE, MLP_SIZE, bias=True)
+        self.w1 = nn.Linear(4 * LSTM_SIZE, MLP_SIZE, bias=True)
         self.activation = nn.Tanh()
         self.w2 = nn.Linear(MLP_SIZE, CLASSES, bias=True)
         self.softmax = nn.Softmax(dim=-1)
@@ -218,31 +217,10 @@ class BiLSTMNet(nn.Module):
         mlp_input = torch.stack(mlp_input).to(self.device)
         return mlp_input
 
-    def forward(self, x, paths):
-        # get the embeddings
-        x = [self.dropout(self.embeddings(torch.tensor(i).to(self.device))) for i in x]
-
-        # run the bi-lstm
-        # h = self.lstm_pass(x)
-        x = torch.nn.utils.rnn.pack_sequence(x, enforce_sorted=False)
-        h, (h_0, c_0) = self.lstm(x)
-        h, h_sizes = torch.nn.utils.rnn.pad_packed_sequence(h)
-
-        # print(f"h_sizes: {sum(h_sizes)},\n h.shape {h.shape}\n ")
-
-        # for each parser configuration that we need to score we arrange from the
-        # output of the bi-lstm the correct input for the feedforward
-        # mlp_input = self.get_mlp_input(paths, h)
-        mlp_input = self.get_mlp_input(paths, h)
-
-        out = self.mlp_pass(mlp_input)
-
-        return out
-
     def lstm_pass(self, x):
         x = torch.nn.utils.rnn.pack_sequence(x, enforce_sorted=False)
-        h, (h_0, c_0) = self.lstm(x)
-        h, h_sizes = torch.nn.utils.rnn.pad_packed_sequence(h)
+        h, _ = self.lstm(x)
+        h, _ = torch.nn.utils.rnn.pad_packed_sequence(h)
         # size h: (length_sentences, batch, output_hidden_units)
         return h
 
@@ -250,6 +228,25 @@ class BiLSTMNet(nn.Module):
         return self.softmax(
             self.w2(self.dropout(self.activation(self.w1(self.dropout(x)))))
         )
+    def forward(self, x, paths):
+        # get the embeddings
+        x = [self.dropout(self.embeddings(torch.tensor(i).to(self.device))) for i in x]
+
+        # run the bi-lstm
+        # h = self.lstm_pass(x)
+        x = torch.nn.utils.rnn.pack_sequence(x, enforce_sorted=False)
+        h, _ = self.lstm(x)
+        h, _ = torch.nn.utils.rnn.pad_packed_sequence(h)
+
+
+        # for each parser configuration that we need to score we arrange from the
+        # output of the bi-lstm the correct input for the feedforward
+        # mlp_input = self.get_mlp_input(paths, h)
+        mlp_input = self.get_mlp_input(paths, h)
+
+        out = self.mlp_pass(mlp_input)
+        return out
+
 
     # we use this function at inference time. We run the parser and at each step
     # we pick as next move the one with the highest score assigned by the model
@@ -268,15 +265,8 @@ class BiLSTMNet(nn.Module):
                 else:
                     conf.append(parser.buffer[0])
             configurations.append([conf])
-        # print(f"configurations {configurations}")
 
         return configurations
-
-    def parsed_all(self, parsers):
-        for parser in parsers:
-            if not parser.is_tree_final():
-                return False
-        return True
 
     def infere(self, x):
         parsers: List[ArcEager] = [ArcEager(i) for i in x]
@@ -311,7 +301,7 @@ def train(model: BiLSTMNet, dataloader, criterion, optimizer):
     count = 0
 
     for batch in dataloader:
-        print(f"TRAINING: batch {count}/{len(dataloader)/BATCH_SIZE:.0f}")
+        print(f"TRAINING: batch {count}/{len(dataloader):.0f}")
         optimizer.zero_grad()
         sentences, paths, moves, _ = batch
 
@@ -335,8 +325,10 @@ def test(model: BiLSTMNet, dataloader: torch.utils.data.DataLoader):  # type:ign
 
     gold = []
     preds = []
+    count=0
 
     for batch in dataloader:
+        print(f"TEST: batch {count}/{len(dataloader):.0f}")
         sentences, _, _, head = batch
 
         with torch.no_grad():
@@ -352,21 +344,23 @@ def test(model: BiLSTMNet, dataloader: torch.utils.data.DataLoader):  # type:ign
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
-
 with open("bilstm.log", "w") as f:
     for epoch in range(EPOCHS):
         print("Starting Epoch", epoch)
+        # torch.load(f"bilstm_e{epoch+1}.pt")
         avg_train_loss = train(model, train_dataloader, criterion, optimizer)
         val_uas = test(model, dev_dataloader)
 
         log = f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:5.3f} | dev_uas: {val_uas:5.3f} |"
         print(log)
         f.write(log + "\n")
+
         # save the model on pytorch format
         torch.save(model.state_dict(), f"bilstm_e{epoch+1}.pt")
-        # torch.load(f"bilstm_e{epoch+1}.pt")
 
     test_uas = test(model, test_dataloader)
     log = "test_uas: {:5.3f}".format(test_uas)
     print(log)
     f.write(log + "\n")
+
+# %%

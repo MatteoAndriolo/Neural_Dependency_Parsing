@@ -29,7 +29,6 @@ def generate_gold_pathmoves(sentence:List[str], gold:List[int]) -> tuple[List[Li
   '''
   parser = ArcEager(sentence)
   oracle = Oracle(parser, gold)
-
   gold_configurations:List[List[int]] = []
   gold_moves:List[int] = []
 
