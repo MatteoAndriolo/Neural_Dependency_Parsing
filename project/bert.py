@@ -519,7 +519,7 @@ with open("bert.log", "w") as logbert:
         avg_train_loss = train(model, train_dataloader, criterion, optimizer)
         print("AvgTrainLoss", avg_train_loss)
         torch.save(model.state_dict(), f"bert_e{epoch+1}.pt")
-        torch.load(f"model_e{epoch}.pt")
+        #torch.load(f"model_e{epoch}.pt")
         val_uas = test(model, validation_dataloader)
         log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |"
         print(log)
