@@ -189,6 +189,7 @@ print(len(test_dataset)) #type:ignore
 # 
 
 # %%
+BATCH_SIZE = 32
 train_dataloader = torch.utils.data.DataLoader( # type:ignore
   train_dataset,
   batch_size=BATCH_SIZE, 
@@ -526,5 +527,3 @@ with open("bert.log", "w") as logbert:
         logbert.write(log)
         #save the model on pytorch format
 
-
-# %%

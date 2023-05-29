@@ -251,9 +251,9 @@ EPOCHS = 30
 LR = 0.001  # learning rate
 
 
-class Net(nn.Module):
+class BiLSTMNet(nn.Module):
     def __init__(self, device):
-        super(Net, self).__init__()
+        super(BiLSTMNet, self).__init__()
         self.device = device
         self.embeddings = nn.Embedding(
             len(emb_dictionary), EMBEDDING_SIZE, padding_idx=emb_dictionary["<pad>"]
@@ -475,8 +475,7 @@ class Net(nn.Module):
 
 
 
-# %%model = model.to("xpu")
-model = Net(device).to(device)
+model = BiLSTMNet(device).to(device)
 print(model)
 
 
@@ -536,9 +535,6 @@ def test(model, dataloader):
 
 
 # %%
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Device:", device)
-model = Net(device).to(device)
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
@@ -557,7 +553,7 @@ for epoch in range(EPOCHS):
     #save the model on pytorch format
     
 
-# %%
 test_uas = test(model, test_dataloader)
 print("test_uas: {:5.3f}".format(test_uas))
 torch.save(model.state_dict(), "model.pt")
+
