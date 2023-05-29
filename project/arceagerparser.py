@@ -33,6 +33,10 @@ In any case, a clean theoretical solution to
 this problem has so far been lacking.
 """
 
+LEFT_ARC = 0
+RIGHT_ARC = 1
+SHIFT = 2
+REDUCE = 3
 
 class ArcEager:
     def __init__(self, sentence, debug=False):
@@ -189,4 +193,3 @@ if __name__ == "__main__":
         parser.print_configuration()
         print(gold)
         input()
-    # TODO implement test to check if  oracle and parser are correct
