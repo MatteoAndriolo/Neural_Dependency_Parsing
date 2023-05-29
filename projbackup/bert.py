@@ -18,7 +18,97 @@ torch.manual_seed(99)
 
 
 # %%
+def is_projective(tree):
+    for i in range(len(tree)):
+        if tree[i] == -1:
+            continue
+        left = min(i, tree[i])
+        right = max(i, tree[i])
 
+        for j in range(0, left):
+            if tree[j] > left and tree[j] < right:
+                return False
+        for j in range(left + 1, right):
+            if tree[j] < left or tree[j] > right:
+                return False
+        for j in range(right + 1, len(tree)):
+            if tree[j] > left and tree[j] < right:
+                return False
+
+    return True
+
+
+def generate_gold_path(sentence:List[str], gold:List[int]) -> tuple[List[List[int]], List[int]]:
+  '''
+  sentence: list of tokens
+  gold: list of heads
+  '''
+  parser = ArcEager(sentence)
+  oracle = Oracle(parser, gold)
+
+  gold_configurations:List[List[int]] = []
+  gold_moves:List[int] = []
+
+  while not parser.is_tree_final():
+      # save configuration - index of token in sentence
+      configuration = [
+          parser.stack[ - 1],
+      ]
+      if len(parser.buffer) == 0:
+          configuration.append(-1)
+      else:
+          configuration.append(parser.buffer[0])
+      
+      # save configuration    
+      gold_configurations.append(configuration)
+
+          # save gold move
+      if oracle.is_left_arc_gold():
+          gold_moves.append(0)
+          parser.left_arc()
+      elif oracle.is_right_arc_gold():
+          gold_moves.append(1)
+          parser.right_arc()
+      elif oracle.is_shift_gold():
+          gold_moves.append(2)
+          parser.shift()
+      elif oracle.is_reduce_gold():
+          gold_moves.append(3)
+          parser.reduce()
+  
+  return gold_configurations, gold_moves, 
+
+## ----------- BiLSTM ----------------------------------
+
+
+
+# ----------------- BERT ------------------------------------------------
+
+def match_subtokens(l1:List[str], l2:List[str]):
+    # Create output list
+    output:List[List[int]] = []
+    # Initialize index for l2
+    index = 0
+    # Iterate through l1
+    for token in l1:
+        subtoken_indices = []
+        # Get the indices of the subtokens
+        while index < len(l2) and (not subtoken_indices or l2[index].startswith("#")):
+            subtoken_indices.append(index)
+            index += 1
+        # Append subtoken indices to output
+        output.append(subtoken_indices)
+    return output
+
+
+  
+def tokens_tokenizer_correspondence(tokens:List[List[str]], berttokens:List[List[int]]):
+    global tokenizer
+    correspondences:List[List[List[int]]]=[]
+    
+    for t,bt in zip(tokens, berttokens):
+        correspondences.append(match_subtokens(t, list(tokenizer.convert_ids_to_tokens(bt))))
+    return correspondences
 def get_configurations(toks:List[List[str]], heads:List[List[int]], get_gold_path=False):
   '''
   toks: list of list of tokens
@@ -141,7 +231,7 @@ NUM_LABELS_OUT = 4
 
 # %%
 from transformers import AutoModel
-from arceagerparser import ArcEager 
+from arceagerparser import ArcEager, Oracle
 #modelBert=AutoModel.from_pretrained('bert-base-uncased')
 
 class BERTNet(nn.Module):
@@ -429,7 +519,7 @@ with open("bert.log", "w") as logbert:
         avg_train_loss = train(model, train_dataloader, criterion, optimizer)
         print("AvgTrainLoss", avg_train_loss)
         torch.save(model.state_dict(), f"bert_e{epoch+1}.pt")
-        torch.load(f"model_e{epoch}.pt")
+        #torch.load(f"model_e{epoch}.pt")
         val_uas = test(model, validation_dataloader)
         log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |"
         print(log)
