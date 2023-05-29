@@ -1,23 +1,21 @@
 # %%
 import torch
 import torch.nn as nn
-import pandas as pd
 from transformers import AutoTokenizer
 from typing import List
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 tokenizer=AutoTokenizer.from_pretrained('bert-base-uncased')
 tokenizer.add_tokens(["<ROOT>", "<EMPTY>"], special_tokens=True)
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-torch.manual_seed(42)
 print(device)
+torch.manual_seed(99)
 
-
-BATCH_SIZE = 64
 
 # %% [markdown]
 # # Data
 # 
+
 
 # %%
 def is_projective(tree):
@@ -39,35 +37,12 @@ def is_projective(tree):
 
     return True
 
-# %%
-tokenizer("tokenizer", add_special_tokens=False)
 
-# %%
-from datasets import load_dataset
-
-train_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
-validation_dataset=load_dataset("universal_dependencies", "en_lines", split="validation")
-test_dataset=load_dataset("universal_dependencies", "en_lines", split="test")
-# group the following three print in one
-print(len(train_dataset)) #type:ignore
-print(len(validation_dataset)) #type:ignore
-print(len(test_dataset)) #type:ignore
-
-# remove non projective
-train_dataset = train_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head'])))) 
-validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
-test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
-print(len(train_dataset)) #type:ignore
-print(len(validation_dataset)) #type:ignore
-print(len(test_dataset)) #type:ignore
-
-# %%
 def generate_gold_path(sentence:List[str], gold:List[int]) -> tuple[List[List[int]], List[int]]:
   '''
   sentence: list of tokens
   gold: list of heads
   '''
-  from arceagerparser import ArcEager, Oracle
   parser = ArcEager(sentence)
   oracle = Oracle(parser, gold)
 
@@ -103,6 +78,37 @@ def generate_gold_path(sentence:List[str], gold:List[int]) -> tuple[List[List[in
   
   return gold_configurations, gold_moves, 
 
+## ----------- BiLSTM ----------------------------------
+
+
+
+# ----------------- BERT ------------------------------------------------
+
+def match_subtokens(l1:List[str], l2:List[str]):
+    # Create output list
+    output:List[List[int]] = []
+    # Initialize index for l2
+    index = 0
+    # Iterate through l1
+    for token in l1:
+        subtoken_indices = []
+        # Get the indices of the subtokens
+        while index < len(l2) and (not subtoken_indices or l2[index].startswith("#")):
+            subtoken_indices.append(index)
+            index += 1
+        # Append subtoken indices to output
+        output.append(subtoken_indices)
+    return output
+
+
+  
+def tokens_tokenizer_correspondence(tokens:List[List[str]], berttokens:List[List[int]]):
+    global tokenizer
+    correspondences:List[List[List[int]]]=[]
+    
+    for t,bt in zip(tokens, berttokens):
+        correspondences.append(match_subtokens(t, list(tokenizer.convert_ids_to_tokens(bt))))
+    return correspondences
 def get_configurations(toks:List[List[str]], heads:List[List[int]], get_gold_path=False):
   '''
   toks: list of list of tokens
@@ -135,33 +141,6 @@ def get_configurations(toks:List[List[str]], heads:List[List[int]], get_gold_pat
 
   return gold_configurations, gold_moves,gold_heads
   
-def match_subtokens(l1:List[str], l2:List[str]):
-    # Create output list
-    output:List[List[int]] = []
-    # Initialize index for l2
-    index = 0
-    # Iterate through l1
-    for token in l1:
-        subtoken_indices = []
-        # Get the indices of the subtokens
-        while index < len(l2) and (not subtoken_indices or l2[index].startswith("#")):
-            subtoken_indices.append(index)
-            index += 1
-        # Append subtoken indices to output
-        output.append(subtoken_indices)
-    return output
-
-
-  
-def tokens_tokenizer_correspondence(tokens:List[List[str]], berttokens:List[List[int]]):
-    global tokenizer
-    correspondences:List[List[List[int]]]=[]
-    
-    for t,bt in zip(tokens, berttokens):
-        correspondences.append(match_subtokens(t, list(tokenizer.convert_ids_to_tokens(bt))))
-    return correspondences
-            
-    
 
 def prepare_batch(batch_data,get_gold_path=False):
     print(f"batch data type {type(batch_data)}")
@@ -178,8 +157,6 @@ def prepare_batch(batch_data,get_gold_path=False):
 
 
 
-# %%
-
 
 # %%
 # processed_sample = tokenizer(train_dataset["text"]) # input_ids token_type_ids attention_mask
@@ -188,6 +165,24 @@ def prepare_batch(batch_data,get_gold_path=False):
 
 # processed_sample.keys()
 
+# %%
+from datasets import load_dataset
+
+train_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
+validation_dataset=load_dataset("universal_dependencies", "en_lines", split="validation")
+test_dataset=load_dataset("universal_dependencies", "en_lines", split="test")
+# group the following three print in one
+print(len(train_dataset)) #type:ignore
+print(len(validation_dataset)) #type:ignore
+print(len(test_dataset)) #type:ignore
+
+# remove non projective
+train_dataset = train_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head'])))) 
+validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
+test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
+print(len(train_dataset)) #type:ignore
+print(len(validation_dataset)) #type:ignore
+print(len(test_dataset)) #type:ignore
 
 # %% [markdown]
 # ## Dataloader
@@ -220,7 +215,7 @@ test_dataloader = torch.utils.data.DataLoader( # type:ignore
 # 
 
 # %%
-BATCH_SIZE = 64
+BATCH_SIZE = 32 
 DIM_CONFIG = 2
 LSTM_ISBI = True
 BERT_SIZE = 768
@@ -230,13 +225,13 @@ LSTM_LAYERS = 1
 MLP_SIZE = 200
 CLASSES = 4
 DROPOUT = 0.2
-EPOCHS = 1 # 30
+EPOCHS = 20 # 30
 LR = 0.001  # learning rate
 NUM_LABELS_OUT = 4
 
 # %%
 from transformers import AutoModel
-from arceagerparser import ArcEager 
+from arceagerparser import ArcEager, Oracle
 #modelBert=AutoModel.from_pretrained('bert-base-uncased')
 
 class BERTNet(nn.Module):
@@ -266,7 +261,7 @@ class BERTNet(nn.Module):
     
     c=0
     mlp_input=[]
-    zero_tensor=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
+    zero_tensor=torch.zeros(BERT_SIZE,requires_grad=False, device=self.device)
     for i, (conf, corr) in enumerate(zip(configs, correspondences)):
       c+=len(conf)
       for j in conf:
@@ -276,7 +271,7 @@ class BERTNet(nn.Module):
             zero_tensor if j[1]==-1 else getAvgH(h[i], corr[j[1]])
           ])
         )
-    
+    mlp_input=torch.stack(mlp_input)
     return mlp_input
   
   
@@ -292,6 +287,7 @@ class BERTNet(nn.Module):
 
     # Get the last hidden state of the token `[CLS]` for each example. BERT gives this as the first token in the sequence.
     h = outputs.last_hidden_state
+    h = h.to(self.device)
     
 
     # Apply dropout on cls_output (not on the input)
@@ -357,6 +353,7 @@ class BERTNet(nn.Module):
     return out
       
   def mlp_pass(self, x):
+      x=x.to(self.device)
       return self.softmax(
           self.w2(self.dropout(self.activation(self.w1(self.dropout(x)))))
       )
@@ -368,16 +365,19 @@ class BERTNet(nn.Module):
     merged_tokens=[self.merge_splitted_tokens(list(tokenizer.convert_ids_to_tokens(tok))) for tok in input_ids]
 
     parsers:List[ArcEager] =[ArcEager(tok) for tok in merged_tokens]
+    parsers=parsers
     # pass list of tokens merged and non merged 
     correspondences= tokens_tokenizer_correspondence(merged_tokens , input_ids)
-    h = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+    correspondences=correspondences
+    h = self.bert(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.to(self.device)
     
     
     while not all([t.is_tree_final() for t in parsers]):# self.parsed_all(parsers):
       # get the current configuration and score next moves
       configurations = self.get_configurations(parsers)
       mlp_input = self.get_mlp_input(configurations, h, correspondences)
-      mlp_out = self.mlp_pass(mlp_input)
+      mlp_input = mlp_input.to(self.device)
+      mlp_out = self.mlp_pass(mlp_input).to(self.device)
       # take the next parsing step
       self.parse_step(parsers, mlp_out)
 
@@ -458,143 +458,15 @@ class BERTNet(nn.Module):
                 
       
 model = BERTNet(device)
+model = model.to(device)
 
-
-# %%
-# from transformers import AutoModel
-
-# #modelBert=AutoModel.from_pretrained('bert-base-uncased')
-
-# class BERTNet(nn.Module):
-#   def __init__(self,device) -> None:
-#     super().__init__()
-#     self.device=device
-    
-#     self.embeddings = nn.Embedding(
-#         len(tokenizer), EMBEDDING_SIZE, padding_idx=0
-#     )
-    
-#     self.bert = AutoModel.from_pretrained('bert-base-uncased')
-#     self.bert.resize_token_embeddings(len(tokenizer))
-#     self.w1=nn.Linear(DIM_CONFIG*BERT_SIZE, MLP_SIZE)
-#     self.w2=nn.Linear(MLP_SIZE, CLASSES)
-#     self.activation= nn.Tanh()
-#     self.softmax=nn.Softmax(dim=-1)
-#     self.dropout = nn.Dropout(DROPOUT)
-    
-#   def forward(self, bertInput, configs, correspondencens):
-#     # --------------------------------- BERT  ---------------------------------
-#     #x=[self.dropout(self.embeddings(torch.tensor(s).to(self.device))) for s in bertInput]
-#     bertInput=bertInput.to(self.device)
-#     input_ids=bertInput['input_ids'].to(self.device)
-#     attention_mask=bertInput['attention_mask'].to(self.device)
-    
-#         # Apply the BERT model. This will return a sequence of hidden-states at the output of the last layer of the model.
-#     outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-
-#     # Get the last hidden state of the token `[CLS]` for each example. BERT gives this as the first token in the sequence.
-#     h = outputs.last_hidden_state
-    
-#     # --------------------------------- LINEAR--------------------------------
-#     ## Gets mlp input
-#     def getAvgH(h, corr):
-#       avgH=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
-#       for i in corr:
-#         avgH+=h[i]
-#       avgH/=len(corr)
-#       return avgH
-    
-#     c=0
-#     mlp_input=[]
-#     zero_tensor=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
-#     for i, (conf, corr) in enumerate(zip(configs, correspondencens)):
-#       c+=len(conf)
-#       for j in conf:
-#         mlp_input.append(
-#           torch.cat([
-#             zero_tensor if j[0]==-1 else getAvgH(h[i], corr[j[0]]),
-#             zero_tensor if j[1]==-1 else getAvgH(h[i], corr[j[1]])
-#           ])
-#         )
-#     ## end of getting input
-#     mlp_input=torch.stack(mlp_input)
-    
-#     out=self.softmax(self.w2(self.activation(self.w1(self.dropout(mlp_input)))))
-#     return out
-
-#   def mlp_pass(self, mlp_input):
-#     return self.softmax(self.w2(self.activation(self.w1(self.dropout(mlp_input)))))
-  
-#   def get_mlp_input(self, h, configs, correspondences):
-#     def getAvgH(h, corr):
-#       avgH=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
-#       for i in corr:
-#         avgH+=h[i]
-#       avgH/=len(corr)
-#       return avgH
-    
-#     c=0
-#     mlp_input=[]
-#     zero_tensor=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
-#     for i, (conf, corr) in enumerate(zip(configs, correspondences)):
-#       c+=len(conf)
-#       for j in conf:
-#         mlp_input.append(
-#           torch.cat([
-#             zero_tensor if j[0]==-1 else getAvgH(h[i], corr[j[0]]),
-#             zero_tensor if j[1]==-1 else getAvgH(h[i], corr[j[1]])
-#           ])
-#         )
-
-#   def get_configurations(self, parsers):
-#     configurations = []
-#     for parser in parsers:
-#       if parser.is_tree_final():
-#         conf = [-1, -1, -1]
-#       else:
-#           conf = [
-#               parser.stack[len(parser.stack) - 2],
-#               parser.stack[len(parser.stack) - 1],
-#           ]
-#           if len(parser.buffer) == 0:
-#               conf.append(-1)
-#           else:
-#               conf.append(parser.buffer[0])
-#       configurations.append([conf])
-#     # print(f"configurations {configurations}")
-#     return configurations
-
-#   def infere(self, bertInput):
-#     from arceagerparser import ArcEager, Oracle
-#     parsers =[ArcEager(tok) for tok in tokens]
-#     tok_sentences= tokenizer(["<ROOT> "+bd["text"] for bd in batch_data], padding=True, return_tensors="pt", add_special_tokens=False ) # FIXME : add ROOT token
-  
-#     bertInput=bertInput.to(self.device)
-#     input_ids=bertInput['input_ids'].to(self.device)
-#     attention_mask=bertInput['attention_mask'].to(self.device)
-#     outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-    
-    
-#     while not self.parsed_all(parsers):
-#       # get the current configuration and score next moves
-#       configurations = self.get_configurations(parsers)
-#       mlp_input = self.get_mlp_input(configurations, h)
-#       mlp_out = self.mlp(mlp_input)
-#       # take the next parsing step
-#       self.parse_step(parsers, mlp_out)
-
-#     # return the predicted dependency tree
-#     return [parser.arcs for parser in parsers]
-      
-      
-# model = BERTNet(device)
 
 # %% [markdown]
 # ## run model
 # 
 
 # %%
-def train(model, dataloader, criterion, optimizer):
+def train(model:BERTNet, dataloader, criterion, optimizer):
     model.train()  # setup model for training mode
     total_loss = 0
     count = 0
@@ -641,21 +513,18 @@ def test(model, dataloader:torch.utils.data.DataLoader):
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-EPOCHS=1
-for epoch in range(EPOCHS):
-    print("Starting Epoch", epoch)
-    avg_train_loss = train(model, train_dataloader, criterion, optimizer)
-    print("AvgTrainLoss", avg_train_loss)
-    # torch.save(model.state_dict(), f"model_e{epoch}.pt")
-    #torch.load(f"model_e{epoch}.pt")
-    val_uas = test(model, validation_dataloader)
-    print(
-        "Epoch: {:3d} | avg_train_loss: {:5.3f} | dev_uas: {:5.3f} |".format(
-            epoch, avg_train_loss, val_uas
-        )
-    )
-    #save the model on pytorch format
-
+with open("bert.log", "w") as logbert:
+    for epoch in range(EPOCHS):
+        print("Starting Epoch", epoch)
+        avg_train_loss = train(model, train_dataloader, criterion, optimizer)
+        print("AvgTrainLoss", avg_train_loss)
+        torch.save(model.state_dict(), f"bert_e{epoch+1}.pt")
+        torch.load(f"model_e{epoch}.pt")
+        val_uas = test(model, validation_dataloader)
+        log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |"
+        print(log)
+        logbert.write(log)
+        #save the model on pytorch format
 
 
 # %%
