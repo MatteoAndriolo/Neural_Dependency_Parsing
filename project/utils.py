@@ -85,7 +85,7 @@ def evaluate(gold:List[List[int]], preds:List[List[int]]):
 # is empty or a left arc if σ2 is the ROOT. For clarity sake we didn't implement
 # these checks in the parser so we must do them here. This renders the function quite ugly
 # 0 Lx; 1 Rx, 2 shifr; 3 reduce
-def parse_step(self, parsers: List[ArcEager], moves):
+def parse_step(parsers: List[ArcEager], moves:List[List[int]]):
     moves_argm = moves.argmax(-1)
     for i in range(len(parsers)):
         noMove = False

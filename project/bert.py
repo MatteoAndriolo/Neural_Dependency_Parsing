@@ -146,12 +146,28 @@ print(len(train_dataset)) #type:ignore
 print(len(validation_dataset)) #type:ignore
 print(len(test_dataset)) #type:ignore
 
+
+
 # %% [markdown]
-# ## Dataloader
+# # NET
 # 
 
 # %%
-BATCH_SIZE = 32
+BATCH_SIZE = 32 
+DIM_CONFIG = 2
+LSTM_ISBI = True
+BERT_SIZE = 768
+EMBEDDING_SIZE = BERT_SIZE
+DIM_CONFIG = 2
+LSTM_LAYERS = 1
+MLP_SIZE = 200
+CLASSES = 4
+DROPOUT = 0.2
+EPOCHS = 20 # 30
+LR = 0.001  # learning rate
+NUM_LABELS_OUT = 4
+# %%
+# ## Dataloader
 train_dataloader = torch.utils.data.DataLoader( # type:ignore
   train_dataset,
   batch_size=BATCH_SIZE, 
@@ -173,28 +189,11 @@ test_dataloader = torch.utils.data.DataLoader( # type:ignore
   collate_fn=lambda x: prepare_batch(x, get_gold_path=False)
 )
 
-# %% [markdown]
-# # NET
-# 
-
-# %%
-BATCH_SIZE = 32 
-DIM_CONFIG = 2
-LSTM_ISBI = True
-BERT_SIZE = 768
-EMBEDDING_SIZE = BERT_SIZE
-DIM_CONFIG = 2
-LSTM_LAYERS = 1
-MLP_SIZE = 200
-CLASSES = 4
-DROPOUT = 0.2
-EPOCHS = 20 # 30
-LR = 0.001  # learning rate
-NUM_LABELS_OUT = 4
+#%%
 
 from transformers import AutoModel
 from arceagerparser import ArcEager, Oracle
-from util import parse_step
+from utils import parse_step
 
 class BERTNet(nn.Module):
   def __init__(self,device) -> None:
@@ -261,7 +260,7 @@ class BERTNet(nn.Module):
       )
 
 
-   def get_configurations(self, parsers):
+  def get_configurations(self, parsers):
     configurations = []
     for parser in parsers:
       if parser.is_tree_final():
@@ -288,14 +287,13 @@ class BERTNet(nn.Module):
   
   def infere(self, bertInput):
     attention_mask=bertInput['attention_mask'].to(self.device)
-
+    input_ids=bertInput['input_ids'].to(self.device)
     merged_tokens=[merge_splitted_tokens(list(tokenizer.convert_ids_to_tokens(tok))) for tok in input_ids]
     correspondences= tokens_tokenizer_correspondence(merged_tokens , input_ids)
 
     parsers:List[ArcEager] =[ArcEager(tok) for tok in merged_tokens]
 
     bertInput=bertInput.to(self.device)
-    input_ids=bertInput['input_ids'].to(self.device)
     h = self.bert(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.to(self.device)
     
     
@@ -324,7 +322,7 @@ model = model.to(device)
 # %%
 from utils import evaluate
 
-def train(model:BERTNet, dataloader, criterion, optimizer):
+def train(model:BERTNet, dataloader:torch.utils.data.DataLoader, criterion, optimizer):
     model.train()  # setup model for training mode
     total_loss = 0
     count = 0
@@ -390,3 +388,5 @@ with open("bert.log", "w") as f:
     f.write(log+"\n")
 
 
+
+# %%
