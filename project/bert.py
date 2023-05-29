@@ -135,8 +135,8 @@ train_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
 validation_dataset=load_dataset("universal_dependencies", "en_lines", split="validation")
 test_dataset=load_dataset("universal_dependencies", "en_lines", split="test")
 print(
-    f"train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}"
-)  # type:ignore
+    f"train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}" #type:ignore
+) 
 
 
 # remove non projective
@@ -144,8 +144,8 @@ train_dataset = train_dataset.filter(lambda x:is_projective([-1]+list(map(int,x[
 validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
 test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
 print(
-    f"PROJECTIVE -> train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}"
-)  # type:ignore
+    f"PROJECTIVE -> train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}" #type:ignore
+)  
 
 
 
@@ -207,6 +207,8 @@ class BERTNet(nn.Module):
     
     self.bert = AutoModel.from_pretrained('bert-base-uncased')
     self.bert.resize_token_embeddings(len(tokenizer))
+    for param in self.bert.parameters():
+      param.requires_grad = False
     
     self.w1=nn.Linear(DIM_CONFIG*BERT_SIZE, MLP_SIZE)
     self.w2=nn.Linear(MLP_SIZE, CLASSES)
@@ -304,7 +306,7 @@ print(model)
 # %%
 from utils import evaluate
 
-def train(model:BERTNet, dataloader:torch.utils.data.DataLoader, criterion, optimizer):
+def train(model:BERTNet, dataloader:torch.utils.data.DataLoader, criterion, optimizer): #type:ignore
     model.train()  # setup model for training mode
     total_loss = 0
     count = 0
