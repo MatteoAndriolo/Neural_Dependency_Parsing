@@ -15,6 +15,33 @@ torch.manual_seed(99)
 # %%
 from arceagerparser import ArcEager, Oracle
 
+def create_dictionary(dataset, threshold=3):
+    '''
+    :param dataset: list of samples
+    :param threshold: minimum number of appearances of a word in the dataset
+    :return: a dictionary of word/index pairs
+    
+    '''
+    dic = {}  # dictionary of word counts
+    for sample in dataset:
+        for word in sample["tokens"]:
+            if word in dic:
+                dic[word] += 1
+            else:
+                dic[word] = 1
+
+    map = {}  # dictionary of word/index pairs. This is our embedding list
+    map["<pad>"] = 0
+    map["<ROOT>"] = 1
+    map["<unk>"] = 2  # used for words that do not appear in our list
+
+    next_indx = 3
+    for word in dic.keys():
+        if dic[word] >= threshold:
+            map[word] = next_indx
+            next_indx += 1
+
+    return map
 
 def process_sample(sample, emb_dictionary, get_gold_path=False):
     # put sentence and gold tree in our format
@@ -72,6 +99,66 @@ def process_sample(sample, emb_dictionary, get_gold_path=False):
     # print("gold_moves", len(gold_moves))
     # print("gold", len(gold))
     return enc_sentence, gold_path, gold_moves, gold
+
+def is_projective(tree):
+    for i in range(len(tree)):
+        if tree[i] == -1:
+            continue
+        left = min(i, tree[i])
+        right = max(i, tree[i])
+
+        for j in range(0, left):
+            if tree[j] > left and tree[j] < right:
+                return False
+        for j in range(left + 1, right):
+            if tree[j] < left or tree[j] > right:
+                return False
+        for j in range(right + 1, len(tree)):
+            if tree[j] > left and tree[j] < right:
+                return False
+
+    return True
+
+
+def generate_gold_path(sentence:List[str], gold:List[int]) -> tuple[List[List[int]], List[int]]:
+  '''
+  sentence: list of tokens
+  gold: list of heads
+  '''
+  parser = ArcEager(sentence)
+  oracle = Oracle(parser, gold)
+
+  gold_configurations:List[List[int]] = []
+  gold_moves:List[int] = []
+
+  while not parser.is_tree_final():
+      # save configuration - index of token in sentence
+      configuration = [
+          parser.stack[ - 1],
+      ]
+      if len(parser.buffer) == 0:
+          configuration.append(-1)
+      else:
+          configuration.append(parser.buffer[0])
+      
+      # save configuration    
+      gold_configurations.append(configuration)
+
+          # save gold move
+      if oracle.is_left_arc_gold():
+          gold_moves.append(0)
+          parser.left_arc()
+      elif oracle.is_right_arc_gold():
+          gold_moves.append(1)
+          parser.right_arc()
+      elif oracle.is_shift_gold():
+          gold_moves.append(2)
+          parser.shift()
+      elif oracle.is_reduce_gold():
+          gold_moves.append(3)
+          parser.reduce()
+  
+  return gold_configurations, gold_moves, 
 
 
 # %% [markdown]
@@ -131,16 +218,16 @@ def prepare_batch(batch_data, get_gold_path=False):
 
 BATCH_SIZE = 32 #GPU at 80% with 32 batch size
 
-train_dataloader = tutils.data.DataLoader(  # type:ignore
+train_dataloader = torch.utils.data.DataLoader(  # type:ignore
     train_dataset,
     batch_size=BATCH_SIZE,
     shuffle=True,
     collate_fn=partial(prepare_batch, get_gold_path=True),
 )
-dev_dataloader = tutils.data.DataLoader(  # type: ignore
+dev_dataloader = torch.utils.data.DataLoader(  # type: ignore
     dev_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=partial(prepare_batch)
 )
-test_dataloader = tutils.data.DataLoader(  # type:ignore
+test_dataloader = torch.utils.data.DataLoader(  # type:ignore
     test_dataset,
     batch_size=BATCH_SIZE,
     shuffle=False,
