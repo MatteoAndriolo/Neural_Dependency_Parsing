@@ -75,3 +75,77 @@ def evaluate(gold:List[List[int]], preds:List[List[int]]):
                 correct += 1
 
     return correct / total
+
+
+
+
+
+# In this function we select and perform the next move according to the scores obtained.
+# We need to be careful and select correct moves, e.g. don't do a shift if the buffer
+# is empty or a left arc if σ2 is the ROOT. For clarity sake we didn't implement
+# these checks in the parser so we must do them here. This renders the function quite ugly
+# 0 Lx; 1 Rx, 2 shifr; 3 reduce
+def parse_step(self, parsers: List[ArcEager], moves):
+    moves_argm = moves.argmax(-1)
+    for i in range(len(parsers)):
+        noMove = False
+        # Conditions
+        cond_left = (
+            len(parsers[i].stack)
+            and len(parsers[i].buffer)
+            and parsers[i].stack[-1] != 0
+        )
+        cond_right = len(parsers[i].stack) and len(parsers[i].buffer)
+        cond_reduce = len(parsers[i].stack) and parsers[i].stack[-1] != 0
+        cond_shift = len(parsers[i].buffer) > 0
+        if parsers[i].is_tree_final():
+            continue
+        else:
+            if moves_argm[i] == 0:
+#------------------------------ firdt condition to check is the left arc -> right arc -> shift -> reduce------------------------------
+                if cond_left:
+                    parsers[i].left_arc()
+                else:
+                    if cond_right:
+                        parsers[i].right_arc()
+                    elif cond_shift:
+                        parsers[i].shift()
+                    elif cond_reduce:
+                        parsers[i].reduce()
+                    else:
+                        print("noMove was possible on left")
+#------------------------------ firdt condition to check is the right arc -> shift -> reduce------------------------------
+            if moves_argm[i] == 1:
+                #print("right")
+                if cond_right:
+                    parsers[i].right_arc()
+                else:
+                    if cond_shift:
+                        parsers[i].shift()
+                    elif cond_reduce:
+                        parsers[i].reduce() 
+                    else:
+                        print("noMove was possible on right")
+#------------------------------ firdt condition to check is the shift -> reduce------------------------------
+            if moves_argm[i] == 2:
+                if cond_shift:
+                    parsers[i].shift()
+                elif cond_reduce:
+                    parsers[i].reduce()
+                else:
+                    print("noMove was possible on shift")
+#------------------------------ firdt condition to check is the reduce and if no reduce was possible take in account the probabilities ------------------------------
+            if moves_argm[i] == 3:
+                if cond_reduce:
+                    parsers[i].reduce()
+                else:
+                    if moves[i][0] > moves[i][1] and moves[i][0] > moves[i][2] and cond_left:
+                        parsers[i].left_arc()
+                    else:
+                        if moves[i][1] > moves[i][2] and cond_right:
+                            parsers[i].right_arc()
+                        else:
+                            if cond_shift:
+                                parsers[i].shift()
+                            else:
+                                print(moves[i][0], moves[i][1], moves[i][2], cond_left, cond_right, cond_shift)

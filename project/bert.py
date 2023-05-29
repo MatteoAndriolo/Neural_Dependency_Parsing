@@ -20,6 +20,17 @@ torch.manual_seed(99)
 # %%
 from utils import is_projective, generate_gold_pathmoves 
 
+def merge_splitted_tokens(tokens:List[str]):
+    out:List[str]=[]
+    len=0
+    for t in tokens:
+      if t[0]=="#":
+        out[len-1]+=t.strip("#")
+      else:
+        out.append(t)
+        len+=1
+    return out
+
 def match_subtokens(l1:List[str], l2:List[str]):
     # Create output list
     output:List[List[int]] = []
@@ -181,10 +192,9 @@ EPOCHS = 20 # 30
 LR = 0.001  # learning rate
 NUM_LABELS_OUT = 4
 
-# %%
 from transformers import AutoModel
 from arceagerparser import ArcEager, Oracle
-#modelBert=AutoModel.from_pretrained('bert-base-uncased')
+from util import parse_step
 
 class BERTNet(nn.Module):
   def __init__(self,device) -> None:
@@ -197,80 +207,61 @@ class BERTNet(nn.Module):
     
     self.bert = AutoModel.from_pretrained('bert-base-uncased')
     self.bert.resize_token_embeddings(len(tokenizer))
+    
     self.w1=nn.Linear(DIM_CONFIG*BERT_SIZE, MLP_SIZE)
     self.w2=nn.Linear(MLP_SIZE, CLASSES)
     self.activation= nn.Tanh()
     self.softmax=nn.Softmax(dim=-1)
     self.dropout = nn.Dropout(DROPOUT)
   
-  def get_mlp_input(self, configs, h, correspondences):
-    def getAvgH(h, corr):
-      avgH=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
-      for i in corr:
+
+  def getAvgH(self, h, corr):
+    avgH=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
+    for i in corr:
         avgH+=h[i]
-      avgH/=len(corr)
-      return avgH
-    
-    c=0
+        avgH/=len(corr)
+    return avgH
+  
+  def get_mlp_input(self, configs, h, correspondences):
     mlp_input=[]
     zero_tensor=torch.zeros(BERT_SIZE,requires_grad=False, device=self.device)
     for i, (conf, corr) in enumerate(zip(configs, correspondences)):
-      c+=len(conf)
       for j in conf:
         mlp_input.append(
           torch.cat([
-            zero_tensor if j[0]==-1 else getAvgH(h[i], corr[j[0]]),
-            zero_tensor if j[1]==-1 else getAvgH(h[i], corr[j[1]])
+            zero_tensor if j[0]==-1 else self.getAvgH(h[i], corr[j[0]]),
+            zero_tensor if j[1]==-1 else self.getAvgH(h[i], corr[j[1]])
           ])
         )
-    mlp_input=torch.stack(mlp_input)
+    mlp_input=torch.stack(mlp_input).to(self.device)
     return mlp_input
   
   
   def forward(self, bertInput, configs, correspondencens):
-    # --------------------------------- BERT  ---------------------------------
-    #x=[self.dropout(self.embeddings(torch.tensor(s).to(self.device))) for s in bertInput]
     bertInput=bertInput.to(self.device)
     input_ids=bertInput['input_ids'].to(self.device)
     attention_mask=bertInput['attention_mask'].to(self.device)
     
         # Apply the BERT model. This will return a sequence of hidden-states at the output of the last layer of the model.
-    outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-
-    # Get the last hidden state of the token `[CLS]` for each example. BERT gives this as the first token in the sequence.
-    h = outputs.last_hidden_state
-    h = h.to(self.device)
+    h = self.bert(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.to(self.device)
     
 
-    # Apply dropout on cls_output (not on the input)
     # --------------------------------- LINEAR--------------------------------
     # mlp_input = self.get_mlp_input(configurations, h, correspondences)
-    def getAvgH(h, corr):
-      avgH=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
-      for i in corr:
-        avgH+=h[i]
-      avgH/=len(corr)
-      return avgH
+    mlp_input=self.get_mlp_input(configs, h, correspondencens)
     
-    c=0
-    mlp_input=[]
-    zero_tensor=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
-    for i, (conf, corr) in enumerate(zip(configs, correspondencens)):
-      c+=len(conf)
-      for j in conf:
-        mlp_input.append(
-          torch.cat([
-            zero_tensor if j[0]==-1 else getAvgH(h[i], corr[j[0]]),
-            zero_tensor if j[1]==-1 else getAvgH(h[i], corr[j[1]])
-          ])
-        )
-    mlp_input=torch.stack(mlp_input)
-    
-    out=self.softmax(self.w2(self.activation(self.w1(self.dropout(mlp_input)))))
+    out=self.mlp_pass(mlp_input)
+
     return out
 
+  
+  def mlp_pass(self, x):
+      return self.softmax(
+          self.w2(self.dropout(self.activation(self.w1(self.dropout(x)))))
+      )
 
-  def get_configurations(self, parsers):
+
+   def get_configurations(self, parsers):
     configurations = []
     for parser in parsers:
       if parser.is_tree_final():
@@ -287,127 +278,40 @@ class BERTNet(nn.Module):
     # print(f"configurations {configurations}")
     return configurations
 
-  def parsed_all(self, parsers):
+    def parsed_all(self, parsers):
         for parser in parsers:
             if not parser.is_tree_final():
                 return False
         return True
 
-  def merge_splitted_tokens(self, tokens:List[str]):
-    out:List[str]=[]
-    len=0
-    for t in tokens:
-      if t[0]=="#":
-        out[len-1]+=t.strip("#")
-      else:
-        out.append(t)
-        len+=1
-    return out
       
-  def mlp_pass(self, x):
-      x=x.to(self.device)
-      return self.softmax(
-          self.w2(self.dropout(self.activation(self.w1(self.dropout(x)))))
-      )
   
   def infere(self, bertInput):
-    bertInput=bertInput.to(self.device)
-    input_ids=bertInput['input_ids'].to(self.device)
     attention_mask=bertInput['attention_mask'].to(self.device)
-    merged_tokens=[self.merge_splitted_tokens(list(tokenizer.convert_ids_to_tokens(tok))) for tok in input_ids]
+
+    merged_tokens=[merge_splitted_tokens(list(tokenizer.convert_ids_to_tokens(tok))) for tok in input_ids]
+    correspondences= tokens_tokenizer_correspondence(merged_tokens , input_ids)
 
     parsers:List[ArcEager] =[ArcEager(tok) for tok in merged_tokens]
-    parsers=parsers
-    # pass list of tokens merged and non merged 
-    correspondences= tokens_tokenizer_correspondence(merged_tokens , input_ids)
-    correspondences=correspondences
+
+    bertInput=bertInput.to(self.device)
+    input_ids=bertInput['input_ids'].to(self.device)
     h = self.bert(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.to(self.device)
     
     
-    while not all([t.is_tree_final() for t in parsers]):# self.parsed_all(parsers):
+    while not all([t.is_tree_final() for t in parsers]):
       # get the current configuration and score next moves
       configurations = self.get_configurations(parsers)
       mlp_input = self.get_mlp_input(configurations, h, correspondences)
-      mlp_input = mlp_input.to(self.device)
-      mlp_out = self.mlp_pass(mlp_input).to(self.device)
+      mlp_out = self.mlp_pass(mlp_input)
       # take the next parsing step
-      self.parse_step(parsers, mlp_out)
+      parse_step(parsers, mlp_out)
 
     # return the predicted dependency tree
     return [parser.arcs for parser in parsers]
   
   
   
-  # In this function we select and perform the next move according to the scores obtained.
-  # We need to be careful and select correct moves, e.g. don't do a shift if the buffer
-  # is empty or a left arc if σ2 is the ROOT. For clarity sake we didn't implement
-  # these checks in the parser so we must do them here. This renders the function quite ugly
-  # 0 Lx; 1 Rx, 2 shifr; 3 reduce
-  def parse_step(self, parsers, moves):
-    moves_argm = moves.argmax(-1)
-    for i in range(len(parsers)):
-        noMove = False
-        # Conditions
-        cond_left = (
-            len(parsers[i].stack)
-            and len(parsers[i].buffer)
-            and parsers[i].stack[-1] != 0
-        )
-        cond_right = len(parsers[i].stack) and len(parsers[i].buffer)
-        cond_reduce = len(parsers[i].stack) and parsers[i].stack[-1] != 0
-        cond_shift = len(parsers[i].buffer) > 0
-        if parsers[i].is_tree_final():
-            continue
-        else:
-            if moves_argm[i] == 0:
-#------------------------------ firdt condition to check is the left arc -> right arc -> shift -> reduce------------------------------
-                if cond_left:
-                    parsers[i].left_arc()
-                else:
-                    if cond_right:
-                        parsers[i].right_arc()
-                    elif cond_shift:
-                        parsers[i].shift()
-                    elif cond_reduce:
-                        parsers[i].reduce()
-                    else:
-                        print("noMove was possible on left")
-#------------------------------ firdt condition to check is the right arc -> shift -> reduce------------------------------
-            if moves_argm[i] == 1:
-                #print("right")
-                if cond_right:
-                    parsers[i].right_arc()
-                else:
-                    if cond_shift:
-                        parsers[i].shift()
-                    elif cond_reduce:
-                        parsers[i].reduce() 
-                    else:
-                        print("noMove was possible on right")
-#------------------------------ firdt condition to check is the shift -> reduce------------------------------
-            if moves_argm[i] == 2:
-                if cond_shift:
-                    parsers[i].shift()
-                elif cond_reduce:
-                    parsers[i].reduce()
-                else:
-                    print("noMove was possible on shift")
-#------------------------------ firdt condition to check is the reduce and if no reduce was possible take in account the probabilities ------------------------------
-            if moves_argm[i] == 3:
-                if cond_reduce:
-                    parsers[i].reduce()
-                else:
-                    if moves[i][0] > moves[i][1] and moves[i][0] > moves[i][2] and cond_left:
-                        parsers[i].left_arc()
-                    else:
-                        if moves[i][1] > moves[i][2] and cond_right:
-                            parsers[i].right_arc()
-                        else:
-                            if cond_shift:
-                                parsers[i].shift()
-                            else:
-                                print(moves[i][0], moves[i][1], moves[i][2], cond_left, cond_right, cond_shift)
-                
       
 model = BERTNet(device)
 model = model.to(device)
