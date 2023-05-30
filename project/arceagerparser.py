@@ -32,6 +32,7 @@ linear time complexity of the parsing system.
 In any case, a clean theoretical solution to
 this problem has so far been lacking.
 """
+from typing import List
 
 LEFT_ARC = 0
 RIGHT_ARC = 1
@@ -40,18 +41,20 @@ SHIFT = 3
 
 class ArcEager:
     def __init__(self, sentence, debug=False):
+        self.moves = []
         self.sentence = sentence
         self.buffer = [i for i in range(len(self.sentence))]
         self.stack = []
         self.arcs = [-1 for _ in range(len(self.sentence))]
         self.debug = debug
 
-        # three shift moves to initialize the stack
         self.shift()
         if self.debug:
+            self.print_configuration()
             print("end configuration")
 
     def left_arc(self):
+        self.moves.append(LEFT_ARC)
         s1 = self.stack.pop(-1)
         b1 = self.buffer[0]
         self.arcs[s1] = b1
@@ -60,6 +63,7 @@ class ArcEager:
             self.print_configuration()
 
     def right_arc(self):
+        self.moves.append(RIGHT_ARC)
         s1 = self.stack[-1]
         b1 = self.buffer.pop(0)
         self.stack.append(b1)
@@ -69,6 +73,7 @@ class ArcEager:
             self.print_configuration()
 
     def shift(self):
+        self.moves.append(SHIFT)
         b1 = self.buffer.pop(0)
         self.stack.append(b1)
         if self.debug:
@@ -76,6 +81,7 @@ class ArcEager:
             self.print_configuration()
 
     def reduce(self):
+        self.moves.append(REDUCE)
         self.stack.pop()
         if self.debug:
             print("reduce")
@@ -83,6 +89,11 @@ class ArcEager:
 
     def is_tree_final(self):
         return len(self.stack) == 1 and len(self.buffer) == 0
+
+    
+    
+    def get_moves(self):
+        return self.moves
 
     def print_configuration(self):
         s = [self.sentence[i] for i in self.stack]
@@ -93,7 +104,7 @@ class ArcEager:
 
 
 class Oracle:
-    def __init__(self, parser, gold_tree):
+    def __init__(self, parser, gold_tree:List[int]):
         self.parser = parser
         self.gold = gold_tree
 
@@ -116,10 +127,10 @@ class Oracle:
 
         s = self.parser.stack[-1]
         b = self.parser.buffer[0]  # [0]
-        if self.gold[s] == b:
-            return True
+        if self.gold[s] != b:
+            return False
 
-        return False
+        return True
 
     def is_right_arc_gold(self):
         # if topmost stack element is gold head of the first element of the buffer
@@ -128,11 +139,10 @@ class Oracle:
 
         s = self.parser.stack[-1]
         b = self.parser.buffer[0]  # [0]
+        if self.gold[b] != s:
+            return False 
 
-        if self.gold[b] == s:
-            return True
-
-        return False
+        return True 
 
     def is_reduce_gold(self):
         # stack empty  || top no head --> return False
@@ -142,53 +152,70 @@ class Oracle:
             if self.parser.arcs[self.parser.stack[-1]] != -1 and self.parser.stack[-1] != 0:
                 return True
             return False
-        # if exist a link k <-/-> next, k < top then return REDUCE
 
         s = self.parser.stack[-1]
         for i in range(0, len(self.parser.buffer)):
             b = self.parser.buffer[i]
-
             if self.gold[b] == s or self.gold[s] == b:
                 return False 
+            
         return True 
 
     def is_shift_gold(self):
         if len(self.parser.buffer) == 0:
             return False
 
-        # This dictates transition precedence of the parser
         if self.is_left_arc_gold() or self.is_right_arc_gold() or self.is_reduce_gold():
             return False
 
         return True
 
 
-if __name__ == "__main__":
-    from datasets import load_dataset
-
-    sentence = ["<ROOT>", "Their", "point", "has", "been", "made", "."]
-    gold = [-1, 2, 5, 5, 5, 0, 5]
-    # sentence = ["<ROOT>", "He", "began", "to", "write", "again", "."]
-    # gold = [-1, 2, 0, 4, 2, 4, 2]
-    sentence = ["<ROOT>", "Chart", "with", "category", "field"]
-    gold = [-1, 0, 4, 4, 1]
-    parser = ArcEager(sentence)
-    oracle = Oracle(parser, gold)
-    c = 0
+def generate_moves_heads(parser:ArcEager, oracle:Oracle):
     while not parser.is_tree_final():
-        print(c)
-        c += 1
         if oracle.is_left_arc_gold():
+            #print("left arc chosen")
             parser.left_arc()
         elif oracle.is_right_arc_gold():
+            #print("right arc chosen")
             parser.right_arc()
         elif oracle.is_reduce_gold():
+            #print("reduce chosen")
             parser.reduce()
         elif oracle.is_shift_gold():
+            #print("shift chosen")
             parser.shift()
         else:
-            print("error")
+            print(f"NO MOVE in {i} sentence")
+            parser.print_configuration()
             break
-        parser.print_configuration()
-        print(gold)
-        input()
+    
+    return parser.get_moves(), parser.arcs
+
+
+if __name__ == "__main__":
+    from datasets import load_dataset
+    from utils import is_projective
+    training_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
+    training_dataset=training_dataset.filter(lambda x: is_projective([-1]+list(map(int,x["head"]))))
+    
+    for i,a in enumerate(training_dataset):
+        tokens=["<ROOT>"]+a["tokens"]
+        heads=[-1]+list(map(int,a["head"]))
+        
+        parser = ArcEager(tokens)
+        oracle = Oracle(parser, heads)
+        
+        _, arcs =generate_moves_heads(parser, oracle)
+        
+        if arcs != heads:
+            print(f"ERROR HEADS in {i} sentence")
+            parser.print_configuration()
+            break
+        
+
+        
+    
+    
+    
+    
