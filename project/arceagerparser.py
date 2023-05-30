@@ -38,6 +38,7 @@ RIGHT_ARC = 1
 SHIFT = 2
 REDUCE = 3
 
+
 class ArcEager:
     def __init__(self, sentence, debug=False):
         self.sentence = sentence
@@ -109,8 +110,9 @@ class Oracle:
         # first element of the of the buffer is the gold head of the topmost element of the stack
         # if empty lists or if top has no head -> return False
         if (
-            len(self.parser.stack) == 0
-            or len(self.parser.buffer) == 0
+            len(self.parser.stack) == 0  # never happens
+            or len(self.parser.buffer) == 0  # no left arc to produce
+            or len(self.parser.stack) == 1  # should be != 1
             or self.parser.stack[-1] == 0  # if top is ROOT
         ):
             return False
@@ -137,19 +139,21 @@ class Oracle:
 
     def is_reduce_gold(self):
         # stack empty  || top no head --> return False
-        if len(self.parser.stack) == 0:
+        if len(self.parser.stack) == 1:
             return False
         if len(self.parser.buffer) == 0:
             if self.parser.arcs[self.parser.stack[-1]] != -1:
                 return True
+        for i in len(self.parser.buffer):
+            if self.parser.stack[-1] == self.parser.arcs[i]:
+                return False
             return False
         # if exist a link k <-/-> next, k < top then return REDUCE
+        s = self.parser.stack[-1]
+        for i in range(0, len(self.parser.buffer)):
+            b = self.parser.buffer[i]
 
-        b = self.parser.buffer[0]
-        for i in range(0, len(self.parser.stack) - 1):
-            s = self.parser.stack[i]
-
-            if self.gold[s] == b or self.gold[b] == s:
+            if self.gold[b] == s or self.gold[s] == b:
                 return True
         return False
 
