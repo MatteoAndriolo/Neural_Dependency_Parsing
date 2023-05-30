@@ -95,24 +95,29 @@ def parse_step(parsers:List[ArcEager], moves:Tensor):
 
         for j in range(4):
             if parsers[i].is_tree_final():
-                continue
+                noMove = False;break;
             else:
                 if indices[i][j] == LEFT_ARC and cond_left:
+                    #print("left")
                     parsers[i].left_arc()
-                    noMove = False
+                    noMove = False;break;
                 elif indices[i][j] == RIGHT_ARC and cond_right:
+                    #print("right")
                     parsers[i].right_arc()
-                    noMove = False
+                    noMove = False;break;
                 elif indices[i][j] == SHIFT and cond_shift:
+                    #print("shift")
                     parsers[i].shift()
-                    noMove = False
+                    noMove = False;break;
                 elif indices[i][j] == REDUCE and cond_reduce:
+                    #print("reduce")
                     parsers[i].reduce()
-                    noMove = False
-        
-            if noMove:
-                print("noMove was possible")
-                exit(-5)
+                    noMove = False;break;
+        if noMove:
+            print(parsers[i].stack, parsers[i].buffer)
+            print("noMove was possible")
+            exit(-5)
+            
                 
 
 # In this function we select and perform the next move according to the scores obtained.
@@ -126,12 +131,12 @@ def parse_step_2(parsers: List[ArcEager], moves:List[List[int]]):
         noMove = False
         # Conditions
         cond_left = (
-            len(parsers[i].stack)
-            and len(parsers[i].buffer)
+            len(parsers[i].stack)>0
+            and len(parsers[i].buffer)>0
             and parsers[i].stack[-1] != 0
         )
-        cond_right = len(parsers[i].stack) and len(parsers[i].buffer) 
-        cond_reduce = len(parsers[i].stack) and parsers[i].stack[-1] != 0
+        cond_right = len(parsers[i].stack)>0 and len(parsers[i].buffer)>0
+        cond_reduce = len(parsers[i].stack)>0 and parsers[i].stack[-1] != 0
         cond_shift = len(parsers[i].buffer) > 0
         if parsers[i].is_tree_final():
             continue

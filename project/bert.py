@@ -154,12 +154,11 @@ print(
 # 
 
 # %%
-BATCH_SIZE = 32 
+BATCH_SIZE = 50
 DIM_CONFIG = 2
 LSTM_ISBI = True
 BERT_SIZE = 768
 EMBEDDING_SIZE = BERT_SIZE
-DIM_CONFIG = 2
 LSTM_LAYERS = 1
 MLP_SIZE = 200
 CLASSES = 4
@@ -167,8 +166,10 @@ DROPOUT = 0.2
 EPOCHS = 20 # 30
 LR = 0.001  # learning rate
 NUM_LABELS_OUT = 4
-# %%
+# %% [markdown]
 # ## Dataloader
+
+# %%
 train_dataloader = torch.utils.data.DataLoader( # type:ignore
   train_dataset,
   batch_size=BATCH_SIZE, 
@@ -190,7 +191,7 @@ test_dataloader = torch.utils.data.DataLoader( # type:ignore
   collate_fn=lambda x: prepare_batch(x, get_gold_path=False)
 )
 
-#%%
+#%%G
 
 from transformers import AutoModel
 from arceagerparser import ArcEager, Oracle
@@ -210,8 +211,8 @@ class BERTNet(nn.Module):
     for param in self.bert.parameters():
       param.requires_grad = False
     
-    self.w1=nn.Linear(DIM_CONFIG*BERT_SIZE, MLP_SIZE)
-    self.w2=nn.Linear(MLP_SIZE, CLASSES)
+    self.w1=nn.Linear(DIM_CONFIG*BERT_SIZE, 3*MLP_SIZE )
+    self.w2=nn.Linear(3*MLP_SIZE, CLASSES)
     self.activation= nn.Tanh()
     self.softmax=nn.Softmax(dim=-1)
     self.dropout = nn.Dropout(DROPOUT)
@@ -303,6 +304,9 @@ print(model)
 
 
 
+# %% [markdown]
+# ## Run the model
+
 # %%
 from utils import evaluate
 
@@ -358,6 +362,9 @@ with open("bert.log", "w") as f:
     for epoch in range(EPOCHS):
         print("Starting Epoch", epoch)
         avg_train_loss = train(model, train_dataloader, criterion, optimizer)
+        torch.save(model.state_dict(), f"bert_e{epoch+1}.pt")
+        #avg_train_loss = -1
+        #torch.load(f"model_e{epoch}.pt")
         val_uas = test(model, validation_dataloader)
 
         log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |\n"
@@ -365,8 +372,6 @@ with open("bert.log", "w") as f:
         f.write(log)
 
         #save the model on pytorch format
-        torch.save(model.state_dict(), f"bert_e{epoch+1}.pt")
-        #torch.load(f"model_e{epoch}.pt")
 
     test_uas = test(model, test_dataloader)
     log = f"test_uas: {test_uas:5.3f}"
