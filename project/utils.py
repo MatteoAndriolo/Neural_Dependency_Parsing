@@ -37,48 +37,9 @@ def generate_gold_pathmoves(sentence:List[str], gold:List[int]) -> tuple[List[Li
     gold_configurations:list[list[int]] = []
     gold_moves:list[int] = [SHIFT]
   
-    moves, configurations, heads = generate_moves_configurations_heads(parser, oracle)
+    moves, configurations, _ = generate_moves_configurations_heads(parser, oracle)
 
-    
-    while not parser.is_tree_final():
-        # save configuration - index of token in sentence
-        configuration = [
-            parser.stack[-1],
-        ]
-        if len(parser.buffer) == 0:
-            configuration.append(EMPTY)
-        else:
-            configuration.append(parser.buffer[0])
-      
-        gold_configurations.append(configuration)
-
-        # save gold move
-        next_move = oracle.get_next_move()
-        if next_move == LEFT_ARC:
-            gold_moves.append(LEFT_ARC)
-            parser.left_arc()
-        elif next_move == RIGHT_ARC:
-            gold_moves.append(RIGHT_ARC)
-            parser.right_arc()
-        elif next_move == REDUCE:
-            gold_moves.append(REDUCE)
-            parser.reduce()
-        elif next_move == SHIFT:
-            gold_moves.append(SHIFT)
-            parser.shift()
-        else:
-            print("NO MOVE")
-            parser.print_configuration()
-
-    
-    # if gold_moves!=parser.get_moves:
-    #     print("ERROR in gold moves")
-    #     exit(-5)
-    
-      
-    
-  
-    return gold_configurations, gold_moves
+    return configurations,moves 
 
 
 
