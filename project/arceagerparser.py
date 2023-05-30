@@ -34,26 +34,38 @@ this problem has so far been lacking.
 """
 from typing import List
 
+IS_FINAL = -1
 LEFT_ARC = 0
 RIGHT_ARC = 1
 REDUCE = 2
 SHIFT = 3
 
+EMPTY = -1
+
 class ArcEager:
     def __init__(self, sentence, debug=False):
-        self.moves = []
         self.sentence = sentence
         self.buffer = [i for i in range(len(self.sentence))]
         self.stack = []
         self.arcs = [-1 for _ in range(len(self.sentence))]
+        self.moves=[]
+        self.configurations = []
         self.debug = debug
 
+        
         self.shift()
         if self.debug:
             self.print_configuration()
             print("end configuration")
 
+    def update_configurations(self):
+        '''
+        to do before each move
+        '''
+        self.configurations.append([self.stack[-1], self.buffer[0]])
+        
     def left_arc(self):
+        self.update_configurations()
         self.moves.append(LEFT_ARC)
         s1 = self.stack.pop(-1)
         b1 = self.buffer[0]
@@ -63,6 +75,7 @@ class ArcEager:
             self.print_configuration()
 
     def right_arc(self):
+        self.update_configurations
         self.moves.append(RIGHT_ARC)
         s1 = self.stack[-1]
         b1 = self.buffer.pop(0)
@@ -73,6 +86,7 @@ class ArcEager:
             self.print_configuration()
 
     def shift(self):
+        self.update_configurations
         self.moves.append(SHIFT)
         b1 = self.buffer.pop(0)
         self.stack.append(b1)
@@ -81,6 +95,7 @@ class ArcEager:
             self.print_configuration()
 
     def reduce(self):
+        self.update_configurations
         self.moves.append(REDUCE)
         self.stack.pop()
         if self.debug:
@@ -90,17 +105,15 @@ class ArcEager:
     def is_tree_final(self):
         return len(self.stack) == 1 and len(self.buffer) == 0
 
-    
-    
-    def get_moves(self):
-        return self.moves
-
     def print_configuration(self):
         s = [self.sentence[i] for i in self.stack]
         b = [self.sentence[i] for i in self.buffer]
         print(s, b)
         print(self.stack, self.buffer)
         print(self.arcs)
+
+    def get_moves_configurations_arcs(self):
+        return self.moves, self.configurations, self.arcs
 
 
 class Oracle:
@@ -169,9 +182,34 @@ class Oracle:
             return False
 
         return True
+    
+    def get_next_move(self):
+        if self.parser.is_tree_final():
+            return -1
+        if self.is_left_arc_gold():
+            return LEFT_ARC
+        elif self.is_right_arc_gold():
+            return RIGHT_ARC
+        elif self.is_reduce_gold():
+            return REDUCE
+        elif self.is_shift_gold():
+            return SHIFT
+        else:
+            print("NO MOVE")
+            self.parser.print_configuration()
+            return None
 
 
-def generate_moves_heads(parser:ArcEager, oracle:Oracle):
+def generate_moves_configurations_heads(parser:ArcEager, oracle:Oracle):
+    '''
+    input:
+        parser: ArcEager object
+        oracle: Oracle object
+    returns:
+        moves: list of moves
+        arcs: list of heads
+        
+    '''
     while not parser.is_tree_final():
         if oracle.is_left_arc_gold():
             #print("left arc chosen")
@@ -189,13 +227,14 @@ def generate_moves_heads(parser:ArcEager, oracle:Oracle):
             print(f"NO MOVE in {i} sentence")
             parser.print_configuration()
             break
-    
-    return parser.get_moves(), parser.arcs
+        
+    return parser.get_moves_configurations_arcs()
 
 
 if __name__ == "__main__":
     from datasets import load_dataset
     from utils import is_projective
+    errors=False
     training_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
     training_dataset=training_dataset.filter(lambda x: is_projective([-1]+list(map(int,x["head"]))))
     
@@ -206,12 +245,19 @@ if __name__ == "__main__":
         parser = ArcEager(tokens)
         oracle = Oracle(parser, heads)
         
-        _, arcs =generate_moves_heads(parser, oracle)
+        _, _, arcs = generate_moves_configurations_heads(parser, oracle)
         
         if arcs != heads:
             print(f"ERROR HEADS in {i} sentence")
             parser.print_configuration()
+            errors=True
             break
+    
+    if errors:
+        print("ERRORS FOUND")
+        print("TEST NOT PASSED")
+    else:
+        print("TEST PASSED")
         
 
         

@@ -1,4 +1,3 @@
-from arceagerparser import ArcEager, Oracle
 from typing import List
 
 def is_projective(tree):
@@ -22,46 +21,64 @@ def is_projective(tree):
 
 
 
-from arceagerparser import LEFT_ARC,RIGHT_ARC,REDUCE,SHIFT
+from arceagerparser import LEFT_ARC,RIGHT_ARC,REDUCE,SHIFT,EMPTY, ArcEager, Oracle, generate_moves_configurations_heads
 def generate_gold_pathmoves(sentence:List[str], gold:List[int]) -> tuple[List[List[int]], List[int]]:
-  '''
-  sentence: list of tokens
-  gold: list of heads
-  '''
-  parser = ArcEager(sentence)
-  oracle = Oracle(parser, gold)
-  gold_configurations:List[List[int]] = []
-  gold_moves:List[int] = []
-
-  while not parser.is_tree_final():
-      # save configuration - index of token in sentence
-      configuration = [
-          parser.stack[ - 1],
-      ]
-      if len(parser.buffer) == 0:
-          configuration.append(-1)
-      else:
-          configuration.append(parser.buffer[0])
-      
-      # save configuration    
-      gold_configurations.append(configuration)
-
-          # save gold move
-      if oracle.is_left_arc_gold():
-          gold_moves.append(LEFT_ARC)
-          parser.left_arc()
-      elif oracle.is_right_arc_gold():
-          gold_moves.append(RIGHT_ARC)
-          parser.right_arc()
-      elif oracle.is_shift_gold():
-          gold_moves.append(SHIFT)
-          parser.shift()
-      elif oracle.is_reduce_gold():
-          gold_moves.append(REDUCE)
-          parser.reduce()
-      
+    '''
+    input:
+      sentence: list of tokens
+      gold: list of heads
+    
+    returns:
+      gold_configurations: list of configurations
+      gold_moves: list of moves
+    '''
+    parser = ArcEager(sentence)
+    oracle = Oracle(parser, gold)
+    gold_configurations:list[list[int]] = []
+    gold_moves:list[int] = [SHIFT]
   
-  return gold_configurations, gold_moves
+    moves, configurations, heads = generate_moves_configurations_heads(parser, oracle)
+
+    
+    while not parser.is_tree_final():
+        # save configuration - index of token in sentence
+        configuration = [
+            parser.stack[-1],
+        ]
+        if len(parser.buffer) == 0:
+            configuration.append(EMPTY)
+        else:
+            configuration.append(parser.buffer[0])
+      
+        gold_configurations.append(configuration)
+
+        # save gold move
+        next_move = oracle.get_next_move()
+        if next_move == LEFT_ARC:
+            gold_moves.append(LEFT_ARC)
+            parser.left_arc()
+        elif next_move == RIGHT_ARC:
+            gold_moves.append(RIGHT_ARC)
+            parser.right_arc()
+        elif next_move == REDUCE:
+            gold_moves.append(REDUCE)
+            parser.reduce()
+        elif next_move == SHIFT:
+            gold_moves.append(SHIFT)
+            parser.shift()
+        else:
+            print("NO MOVE")
+            parser.print_configuration()
+
+    
+    # if gold_moves!=parser.get_moves:
+    #     print("ERROR in gold moves")
+    #     exit(-5)
+    
+      
+    
+  
+    return gold_configurations, gold_moves
 
 
 
@@ -208,3 +225,31 @@ def get_configurations(parsers):
             configurations.append([conf])
 
         return configurations
+
+
+if __name__== "__main__":
+    from datasets import load_dataset
+    from utils import is_projective
+    from arceagerparser import generate_moves_configurations_heads 
+    training_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
+    training_dataset=training_dataset.filter(lambda x: is_projective([-1]+list(map(int,x["head"]))))
+    errors=False
+    
+    for i,a in enumerate(training_dataset):
+        tokens=["<ROOT>"]+a["tokens"]
+        heads=[-1]+list(map(int,a["head"]))
+        
+        parser = ArcEager(tokens)
+        oracle = Oracle(parser, heads)
+        
+        moves,_,_  =generate_moves_configurations_heads(parser, oracle)
+        _, moves2= generate_gold_pathmoves(tokens, heads)
+
+        if moves!=moves2:
+            errors=True
+            
+    if errors:
+        print("ERROR FOUND")
+        print("TEST FAILED")
+    else:
+        print("TEST PASSED")
