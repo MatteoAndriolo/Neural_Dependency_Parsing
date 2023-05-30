@@ -364,9 +364,9 @@ with open("bert.log", "w") as f:
     for epoch in range(EPOCHS):
         print("Starting Epoch", epoch)
         avg_train_loss = train(model, train_dataloader, criterion, optimizer)
-        torch.save(model.state_dict(), f"bert_e{epoch+1}.pt")
+        torch.save(model.state_dict(), "bert.pt")
         #avg_train_loss = -1
-        #torch.load(f"model_e{epoch}.pt")
+        #torch.load(f"bert.pt")
         val_uas = test(model, validation_dataloader)
 
         log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |\n"
