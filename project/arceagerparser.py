@@ -35,8 +35,8 @@ this problem has so far been lacking.
 
 LEFT_ARC = 0
 RIGHT_ARC = 1
-SHIFT = 2
-REDUCE = 3
+REDUCE = 2
+SHIFT = 3
 
 class ArcEager:
     def __init__(self, sentence, debug=False):
@@ -52,7 +52,7 @@ class ArcEager:
             print("end configuration")
 
     def left_arc(self):
-        s1 = self.stack.pop()
+        s1 = self.stack.pop(-1)
         b1 = self.buffer[0]
         self.arcs[s1] = b1
         if self.debug:
@@ -62,8 +62,8 @@ class ArcEager:
     def right_arc(self):
         s1 = self.stack[-1]
         b1 = self.buffer.pop(0)
-        self.arcs[b1] = s1
         self.stack.append(b1)
+        self.arcs[b1] = s1
         if self.debug:
             print("right arc")
             self.print_configuration()
@@ -109,8 +109,7 @@ class Oracle:
         # first element of the of the buffer is the gold head of the topmost element of the stack
         # if empty lists or if top has no head -> return False
         if (
-            len(self.parser.stack) == 0
-            or len(self.parser.buffer) == 0
+            len(self.parser.buffer) == 0
             or self.parser.stack[-1] == 0  # if top is ROOT
         ):
             return False
@@ -124,7 +123,7 @@ class Oracle:
 
     def is_right_arc_gold(self):
         # if topmost stack element is gold head of the first element of the buffer
-        if len(self.parser.stack) == 0 or len(self.parser.buffer) == 0:
+        if len(self.parser.buffer) == 0:
             return False
 
         s = self.parser.stack[-1]
@@ -137,21 +136,21 @@ class Oracle:
 
     def is_reduce_gold(self):
         # stack empty  || top no head --> return False
-        if len(self.parser.stack) == 0:
+        if self.parser.stack[-1] == 0: # top is root
             return False
         if len(self.parser.buffer) == 0:
-            if self.parser.arcs[self.parser.stack[-1]] != -1:
+            if self.parser.arcs[self.parser.stack[-1]] != -1 and self.parser.stack[-1] != 0:
                 return True
             return False
         # if exist a link k <-/-> next, k < top then return REDUCE
 
-        b = self.parser.buffer[0]
-        for i in range(0, len(self.parser.stack) - 1):
-            s = self.parser.stack[i]
+        s = self.parser.stack[-1]
+        for i in range(0, len(self.parser.buffer)):
+            b = self.parser.buffer[i]
 
-            if self.gold[s] == b or self.gold[b] == s:
-                return True
-        return False
+            if self.gold[b] == s or self.gold[s] == b:
+                return False 
+        return True 
 
     def is_shift_gold(self):
         if len(self.parser.buffer) == 0:

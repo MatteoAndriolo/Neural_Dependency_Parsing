@@ -128,6 +128,13 @@ print(
 
 emb_dictionary = create_dictionary(train_dataset)
 print(f"len(emb_dictionary): {len(emb_dictionary)}")
+
+
+# %%
+train_dataset[1]
+
+
+
 # %% [markdown]
 # ## DataLoaders
 #

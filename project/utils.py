@@ -59,6 +59,7 @@ def generate_gold_pathmoves(sentence:List[str], gold:List[int]) -> tuple[List[Li
       elif oracle.is_reduce_gold():
           gold_moves.append(REDUCE)
           parser.reduce()
+      
   
   return gold_configurations, gold_moves
 
@@ -85,11 +86,11 @@ def parse_step(parsers:List[ArcEager], moves:Tensor):
         noMove =True 
         # Conditions
         cond_left = (
-            len(parsers[i].stack)
-            and len(parsers[i].buffer)
+            len(parsers[i].stack)>0
+            and len(parsers[i].buffer)>0
             and parsers[i].stack[-1] != 0
         )
-        cond_right = len(parsers[i].stack) and len(parsers[i].buffer) 
+        cond_right = len(parsers[i].stack)>0 and len(parsers[i].buffer) >0
         cond_reduce = len(parsers[i].stack) and parsers[i].stack[-1] != 0
         cond_shift = len(parsers[i].buffer) > 0
 

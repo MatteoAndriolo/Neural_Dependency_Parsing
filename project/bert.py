@@ -99,7 +99,7 @@ def prepare_batch(batch_data,get_gold_path=False):
     :return: configurations
     :return: moves
     :return: heads
-    :return: correspondences
+    :return: correspondences/
     '''
     # Extract embeddings
     tok_sentences= tokenizer(
@@ -115,6 +115,9 @@ def prepare_batch(batch_data,get_gold_path=False):
         [bd["head"] for bd in batch_data],
         get_gold_path
     )
+
+    print(head[0],"\n", batch_data[0]["head"])
+
     
     # get correspondences between tokens and bert tokens (subword)
     correspondences=tokens_tokenizer_correspondence(
@@ -145,7 +148,7 @@ validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(
 test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
 print(
     f"PROJECTIVE -> train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}" #type:ignore
-)  
+)   
 
 
 
@@ -154,7 +157,7 @@ print(
 # 
 
 # %%
-BATCH_SIZE = 50
+BATCH_SIZE = 128 
 DIM_CONFIG = 2
 LSTM_ISBI = True
 BERT_SIZE = 768
@@ -222,7 +225,7 @@ class BERTNet(nn.Module):
     avgH=torch.zeros(BERT_SIZE,requires_grad=False).to(self.device)
     for i in corr:
         avgH+=h[i]
-        avgH/=len(corr)
+    avgH/=len(corr)
     return avgH
   
   def get_mlp_input(self, configs, h, correspondences):
@@ -331,7 +334,6 @@ def train(model:BERTNet, dataloader:torch.utils.data.DataLoader, criterion, opti
         loss.backward()
         optimizer.step()
         count += 1
-
     return total_loss / count
 
 
