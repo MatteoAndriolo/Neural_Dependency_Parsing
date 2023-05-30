@@ -179,7 +179,7 @@ test_dataloader = torch.utils.data.DataLoader(  # type:ignore
 
 #%%
 from arceagerparser import ArcEager, Oracle
-from utils import parse_step
+from utils import parse_step, get_configurations
 class BiLSTMNet(nn.Module):
     def __init__(self, device):
         super(BiLSTMNet, self).__init__()
@@ -258,23 +258,6 @@ class BiLSTMNet(nn.Module):
     # we use this function at inference time. We run the parser and at each step
     # we pick as next move the one with the highest score assigned by the model
 
-    def get_configurations(self, parsers):
-        configurations = []
-        for parser in parsers:
-            if parser.is_tree_final():
-                conf = [-1, -1]
-            else:
-                conf = [
-                    parser.stack[len(parser.stack) - 1],
-                ]
-                if len(parser.buffer) == 0:
-                    conf.append(-1)
-                else:
-                    conf.append(parser.buffer[0])
-            configurations.append([conf])
-
-        return configurations
-
     def infere(self, x):
         parsers: List[ArcEager] = [ArcEager(i) for i in x]
 
@@ -284,7 +267,7 @@ class BiLSTMNet(nn.Module):
 
         while not all([t.is_tree_final() for t in parsers]):
             # get the current configuration and score next moves
-            configurations = self.get_configurations(parsers)
+            configurations = get_configurations(parsers)
             mlp_input = self.get_mlp_input(configurations, h)
             mlp_out = self.mlp_pass(mlp_input)
             # take the next parsing step

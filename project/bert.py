@@ -159,14 +159,12 @@ print(
 # %%
 BATCH_SIZE = 128 
 DIM_CONFIG = 2
-LSTM_ISBI = True
 BERT_SIZE = 768
 EMBEDDING_SIZE = BERT_SIZE
-LSTM_LAYERS = 1
 MLP_SIZE = 200
 CLASSES = 4
 DROPOUT = 0.2
-EPOCHS = 20 # 30
+EPOCHS = 20 #
 LR = 0.001  # learning rate
 NUM_LABELS_OUT = 4
 # %% [markdown]
@@ -198,7 +196,7 @@ test_dataloader = torch.utils.data.DataLoader( # type:ignore
 
 from transformers import AutoModel
 from arceagerparser import ArcEager, Oracle
-from utils import parse_step
+from utils import parse_step, get_configurations
 
 class BERTNet(nn.Module):
   def __init__(self,device) -> None:
@@ -261,24 +259,6 @@ class BERTNet(nn.Module):
     return out
 
   
-  def get_configurations(self, parsers):
-    configurations = []
-    for parser in parsers:
-      if parser.is_tree_final():
-        conf = [-1, -1]
-      else:
-        conf = [
-          parser.stack[len(parser.stack) - 1],
-        ]
-        if len(parser.buffer) == 0:
-          conf.append(-1)
-        else:
-          conf.append(parser.buffer[0])
-      configurations.append([conf])
-    # print(f"configurations {configurations}")
-    return configurations
-
-  
   def infere(self, bertInput):
     bertInput=bertInput.to(self.device)
     input_ids=bertInput['input_ids'].to(self.device)
@@ -292,7 +272,7 @@ class BERTNet(nn.Module):
     
     while not all([t.is_tree_final() for t in parsers]):
       # get the current configuration and score next moves
-      configurations = self.get_configurations(parsers)
+      configurations = get_configurations(parsers)
       mlp_input = self.get_mlp_input(configurations, h, correspondences).to(self.device)
       mlp_out = self.mlp_pass(mlp_input).to(self.device)
       # take the next parsing step

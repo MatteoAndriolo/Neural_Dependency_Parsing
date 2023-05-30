@@ -190,3 +190,21 @@ def parse_step_2(parsers: List[ArcEager], moves:List[List[int]]):
                                 parsers[i].shift()
                             else:
                                 print(moves[i][0], moves[i][1], moves[i][2], cond_left, cond_right, cond_shift)
+                                
+                                
+def get_configurations(parsers):
+        configurations = []
+        for parser in parsers:
+            if parser.is_tree_final():
+                conf = [-1, -1]
+            else:
+                conf = [
+                    parser.stack[len(parser.stack) - 1],
+                ]
+                if len(parser.buffer) == 0:
+                    conf.append(-1)
+                else:
+                    conf.append(parser.buffer[0])
+            configurations.append([conf])
+
+        return configurations
