@@ -57,7 +57,7 @@ def tokens_tokenizer_correspondence(tokens:List[List[str]], berttokens:List[List
     return correspondences
 
 
-def get_configurations(toks:List[List[str]], heads:List[List[int]], get_gold_path=False):
+def get_all_configurations(toks:List[List[str]], heads:List[List[int]], get_gold_path=False):
   '''
   toks: list of list of tokens
   heads: list of list of heads
@@ -110,7 +110,7 @@ def prepare_batch(batch_data,get_gold_path=False):
     )
 
     # get gold path and moves
-    configurations, moves, head = get_configurations(
+    configurations, moves, head = get_all_configurations(
         [bd["tokens"] for bd in batch_data],
         [bd["head"] for bd in batch_data],
         get_gold_path
@@ -362,3 +362,5 @@ with open("bert.log", "w") as f:
 
 
 # %%
+
+  
