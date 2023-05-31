@@ -62,35 +62,25 @@ def parse_step(parsers:List[ArcEager], moves:Tensor):
     
     for i in range(len(parsers)):
         noMove =True 
-        # Conditions
-        cond_left = (
-            len(parsers[i].stack)>0
-            and len(parsers[i].buffer)>0
-            and parsers[i].stack[-1] != 0
-        )
-        cond_right = len(parsers[i].stack)>0 and len(parsers[i].buffer) >0
-        cond_reduce = len(parsers[i].stack) and parsers[i].stack[-1] != 0
-        cond_shift = len(parsers[i].buffer) > 0
-
         for j in range(4):
+            cond_left=len(parsers[i].stack)>=1 and len(parsers[i].buffer)>=1 and parsers[i].stack[-1]!=0
+            cond_right=len(parsers[i].stack)>=1 and len(parsers[i].buffer)>=1
+            cond_shift=len(parsers[i].buffer)>=1
+            cond_reduce=len(parsers[i].stack)>=1 and parsers[i].arcs[parsers[i].stack[-1]]!=-1
             if parsers[i].is_tree_final():
                 noMove = False;break;
             else:
                 if indices[i][j] == LEFT_ARC and cond_left:
-                    #print("left")
                     parsers[i].left_arc()
                     noMove = False;break;
                 elif indices[i][j] == RIGHT_ARC and cond_right:
-                    #print("right")
                     parsers[i].right_arc()
                     noMove = False;break;
-                elif indices[i][j] == SHIFT and cond_shift:
-                    #print("shift")
-                    parsers[i].shift()
-                    noMove = False;break;
                 elif indices[i][j] == REDUCE and cond_reduce:
-                    #print("reduce")
                     parsers[i].reduce()
+                    noMove = False;break;
+                elif indices[i][j] == SHIFT and cond_shift :
+                    parsers[i].shift()
                     noMove = False;break;
         if noMove:
             print(parsers[i].stack, parsers[i].buffer)
@@ -170,21 +160,10 @@ def parse_step_2(parsers: List[ArcEager], moves:List[List[int]]):
                                 print(moves[i][0], moves[i][1], moves[i][2], cond_left, cond_right, cond_shift)
                                 
                                 
-def get_configurations(parsers):
+def get_configurations(parsers:List[ArcEager]):
         configurations = []
         for parser in parsers:
-            if parser.is_tree_final():
-                conf = [-1, -1]
-            else:
-                conf = [
-                    parser.stack[len(parser.stack) - 1],
-                ]
-                if len(parser.buffer) == 0:
-                    conf.append(-1)
-                else:
-                    conf.append(parser.buffer[0])
-            configurations.append([conf])
-
+            configurations.append(parser.get_configuration())
         return configurations
 
 

@@ -75,6 +75,7 @@ class ArcEager:
             self.print_configuration()
 
     def right_arc(self):
+        
         self.update_configurations
         self.moves.append(RIGHT_ARC)
         s1 = self.stack[-1]
@@ -114,8 +115,25 @@ class ArcEager:
 
     def get_moves_configurations_arcs(self):
         return self.moves, self.configurations, self.arcs
+    
+    def get_configuration(self):
+        if self.is_tree_final():
+            conf=[-1,-1]
+        else:
+            conf=[parser.stack[-1]]
 
+            if len(parser.buffer) == 0:
+                conf.append(-1)
+            else:
+                conf.append(parser.buffer[0])
+        
+        return conf
+        
 
+            
+
+        
+    
 class Oracle:
     def __init__(self, parser, gold_tree:List[int]):
         self.parser = parser
