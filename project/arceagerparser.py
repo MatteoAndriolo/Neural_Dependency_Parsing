@@ -59,14 +59,17 @@ class ArcEager:
             print("end configuration")
 
     def update_configurations(self):
-        '''
-        to do before each move
-        '''
-        self.configurations.append([self.stack[-1], self.buffer[0]])
+        ''' to do before each move '''
+        if len(self.stack)>0:
+            self.configurations.append([
+                self.stack[-1],
+                self.buffer[0] if len(self.buffer)>0 else EMPTY
+            ])
         
     def left_arc(self):
         self.update_configurations()
         self.moves.append(LEFT_ARC)
+
         s1 = self.stack.pop(-1)
         b1 = self.buffer[0]
         self.arcs[s1] = b1
@@ -75,9 +78,9 @@ class ArcEager:
             self.print_configuration()
 
     def right_arc(self):
-        
-        self.update_configurations
+        self.update_configurations()
         self.moves.append(RIGHT_ARC)
+
         s1 = self.stack[-1]
         b1 = self.buffer.pop(0)
         self.stack.append(b1)
@@ -87,8 +90,10 @@ class ArcEager:
             self.print_configuration()
 
     def shift(self):
-        self.update_configurations
-        self.moves.append(SHIFT)
+        self.update_configurations()
+        if len(self.stack) != 0:
+            self.moves.append(SHIFT)
+
         b1 = self.buffer.pop(0)
         self.stack.append(b1)
         if self.debug:
@@ -96,8 +101,9 @@ class ArcEager:
             self.print_configuration()
 
     def reduce(self):
-        self.update_configurations
+        self.update_configurations()
         self.moves.append(REDUCE)
+
         self.stack.pop()
         if self.debug:
             print("reduce")
@@ -113,19 +119,30 @@ class ArcEager:
         print(self.stack, self.buffer)
         print(self.arcs)
 
-    def get_moves_configurations_arcs(self):
-        return self.moves, self.configurations, self.arcs
+    def get_moves(self):
+        return self.moves
+    def get_configurations(self):
+        """
+        return list of ALL configurations (start to end)
+        """ 
+        return self.configurations
+    def get_arcs(self):
+
+        return self.arcs
     
-    def get_configuration(self):
+    def get_configuration_now(self):
+        """
+        get current configuration
+        """
         if self.is_tree_final():
             conf=[-1,-1]
         else:
-            conf=[parser.stack[-1]]
+            conf=[self.stack[-1]]
 
-            if len(parser.buffer) == 0:
+            if len(self.buffer) == 0:
                 conf.append(-1)
             else:
-                conf.append(parser.buffer[0])
+                conf.append(self.buffer[0])
         
         return conf
         
@@ -220,11 +237,14 @@ class Oracle:
 
 def generate_moves_configurations_heads(parser:ArcEager, oracle:Oracle):
     '''
+    Generate moves configurations heads for a given parser and oracle
+    
     input:
         parser: ArcEager object
         oracle: Oracle object
     returns:
         moves: list of moves
+        configurations: list of configurations
         arcs: list of heads
         
     '''
@@ -246,7 +266,7 @@ def generate_moves_configurations_heads(parser:ArcEager, oracle:Oracle):
             parser.print_configuration()
             break
         
-    return parser.get_moves_configurations_arcs()
+    return parser.get_moves(),parser.get_configurations(),  parser.get_arcs()
 
 
 if __name__ == "__main__":

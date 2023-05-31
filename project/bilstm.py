@@ -68,8 +68,8 @@ def process_sample(tokens, emb_dictionary, get_gold_path=False):
     if get_gold_path:
         gold_path, gold_moves = generate_gold_pathmoves(sentence, head)
     else:
-        gold_path, gold_moves = [], [] 
-
+        gold_path, gold_moves = [], []
+    
     return enc_sentence, gold_path, gold_moves, head
 
 
@@ -92,6 +92,7 @@ def prepare_batch(batch_data, get_gold_path=False):
     paths = [s[1] for s in data]
     moves = [s[2] for s in data]
     heads = [s[3] for s in data]
+    #print("prepare batch", paths)
     return sentences, paths, moves, heads
 
 
@@ -145,7 +146,7 @@ train_dataset[1]
 #
 
 # %%
-BATCH_SIZE = 32
+BATCH_SIZE = 6
 EMBEDDING_SIZE = 200
 LSTM_SIZE = 200
 LSTM_LAYERS = 2  # It was 1 before
@@ -245,12 +246,10 @@ class BiLSTMNet(nn.Module):
         h, _ = self.lstm(x)
         h, _ = torch.nn.utils.rnn.pad_packed_sequence(h)
 
-
         # for each parser configuration that we need to score we arrange from the
         # output of the bi-lstm the correct input for the feedforward
         # mlp_input = self.get_mlp_input(paths, h)
         mlp_input = self.get_mlp_input(paths, h)
-
         out = self.mlp_pass(mlp_input)
         return out
 
@@ -291,16 +290,14 @@ def train(model: BiLSTMNet, dataloader, criterion, optimizer):
     count = 0
 
     for batch in dataloader:
-        print(f"TRAINING: batch {count}/{len(dataloader):.0f}")
+        print(f"TRAIN: batch {count}/{len(dataloader):.0f}")
         optimizer.zero_grad()
         sentences, paths, moves, _ = batch
-
         out = model(sentences, paths)
 
         labels = torch.tensor(sum(moves, [])).to(
             device
         )  # sum(moves, []) flatten the array
-
         loss = criterion(out, labels)
         total_loss += loss.item()
         loss.backward()

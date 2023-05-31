@@ -34,8 +34,6 @@ def generate_gold_pathmoves(sentence:List[str], gold:List[int]) -> tuple[List[Li
     '''
     parser = ArcEager(sentence)
     oracle = Oracle(parser, gold)
-    gold_configurations:list[list[int]] = []
-    gold_moves:list[int] = [SHIFT]
   
     moves, configurations, _ = generate_moves_configurations_heads(parser, oracle)
 
@@ -161,10 +159,13 @@ def parse_step_2(parsers: List[ArcEager], moves:List[List[int]]):
                                 
                                 
 def get_configurations(parsers:List[ArcEager]):
-        configurations = []
-        for parser in parsers:
-            configurations.append(parser.get_configuration())
-        return configurations
+    '''
+    Returns the current configuration of each parser in the list
+    '''
+    configurations = []
+    for parser in parsers:
+        configurations.append([parser.get_configuration_now()])
+    return configurations
 
 
 if __name__== "__main__":
