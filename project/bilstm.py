@@ -273,7 +273,7 @@ class BiLSTMNet(nn.Module):
             parse_step(parsers, mlp_out)
 
         # return the predicted dependency tree
-        return [parser.arcs for parser in parsers]
+        return [parser.list_arcs for parser in parsers]
 
 
 model = BiLSTMNet(device).to(device)

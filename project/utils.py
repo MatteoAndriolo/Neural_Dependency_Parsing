@@ -1,5 +1,19 @@
 from typing import List
 
+def check_bert_sentence(sentence):
+    if sentence[0] != "<ROOT>":
+        sentence = ["<ROOT>"] + sentence
+    return sentence
+
+def check_bert_heads(heads):
+    if heads[0] != -1:
+        heads = [-1] + heads
+    return heads
+
+def check_bert_format(sentence, heads):
+    return check_bert_sentence(sentence), check_bert_heads(heads)
+
+
 def is_projective(tree):
     for i in range(len(tree)):
         if tree[i] == -1:
@@ -21,24 +35,7 @@ def is_projective(tree):
 
 
 
-from arceagerparser import LEFT_ARC,RIGHT_ARC,REDUCE,SHIFT,EMPTY, ArcEager, Oracle, generate_moves_configurations_heads
-def generate_gold_pathmoves(sentence:List[str], gold:List[int]) -> tuple[List[List[int]], List[int]]:
-    '''
-    input:
-      sentence: list of tokens
-      gold: list of heads
-    
-    returns:
-      gold_configurations: list of configurations
-      gold_moves: list of moves
-    '''
-    parser = ArcEager(sentence)
-    oracle = Oracle(parser, gold)
-  
-    moves, configurations, _ = generate_moves_configurations_heads(parser, oracle)
-
-    return configurations,moves 
-
+from arceagerparser import LEFT_ARC,RIGHT_ARC,REDUCE,SHIFT,ArcEager, Oracle, generate_gold
 
 
 def evaluate(gold:List[List[int]], preds:List[List[int]]):
@@ -64,7 +61,7 @@ def parse_step(parsers:List[ArcEager], moves:Tensor):
             cond_left=len(parsers[i].stack)>=1 and len(parsers[i].buffer)>=1 and parsers[i].stack[-1]!=0
             cond_right=len(parsers[i].stack)>=1 and len(parsers[i].buffer)>=1
             cond_shift=len(parsers[i].buffer)>=1
-            cond_reduce=len(parsers[i].stack)>=1 and parsers[i].arcs[parsers[i].stack[-1]]!=-1
+            cond_reduce=len(parsers[i].stack)>=1 and parsers[i].list_arcs[parsers[i].stack[-1]]!=-1
             if parsers[i].is_tree_final():
                 noMove = False;break;
             else:
@@ -158,16 +155,6 @@ def parse_step_2(parsers: List[ArcEager], moves:List[List[int]]):
                                 print(moves[i][0], moves[i][1], moves[i][2], cond_left, cond_right, cond_shift)
                                 
                                 
-def get_configurations(parsers:List[ArcEager]):
-    '''
-    Returns the current configuration of each parser in the list
-    '''
-    configurations = []
-    for parser in parsers:
-        configurations.append([parser.get_configuration_now()])
-    return configurations
-
-
 if __name__== "__main__":
     from datasets import load_dataset
     from utils import is_projective

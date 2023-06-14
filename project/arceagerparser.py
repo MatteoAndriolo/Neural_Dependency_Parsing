@@ -34,12 +34,13 @@ this problem has so far been lacking.
 """
 from typing import List
 
-IS_FINAL = -1
+
 LEFT_ARC = 0
 RIGHT_ARC = 1
 REDUCE = 2
 SHIFT = 3
 
+IS_FINAL = -1
 EMPTY = -1
 
 class ArcEager:
@@ -47,64 +48,67 @@ class ArcEager:
         self.sentence = sentence
         self.buffer = [i for i in range(len(self.sentence))]
         self.stack = []
-        self.arcs = [-1 for _ in range(len(self.sentence))]
-        self.moves=[]
-        self.configurations = []
-        self.debug = debug
 
+        self.list_arcs = [-1 for _ in range(len(self.sentence))]
+        self.list_moves=[]
+        self.list_configurations = []
+
+        self.debug = debug
         
-        self.shift()
+        # Do first shift -> add ROOT to stack
+        self.stack.append(self.buffer.pop(0))
         if self.debug:
             self.print_configuration()
             print("end configuration")
 
-    def update_configurations(self):
+    def update_configurations(self, move):
         ''' to do before each move '''
         if len(self.stack)>0:
-            self.configurations.append([
+            self.list_configurations.append([
                 self.stack[-1],
                 self.buffer[0] if len(self.buffer)>0 else EMPTY
             ])
+            self.list_moves.append(move)
+            
         
     def left_arc(self):
-        self.update_configurations()
-        self.moves.append(LEFT_ARC)
-
+        self.update_configurations(LEFT_ARC)
+        # do left arc
         s1 = self.stack.pop(-1)
         b1 = self.buffer[0]
-        self.arcs[s1] = b1
+        self.list_arcs[s1] = b1
+        # debug
         if self.debug:
             print("left arc")
             self.print_configuration()
 
     def right_arc(self):
-        self.update_configurations()
-        self.moves.append(RIGHT_ARC)
-
+        self.update_configurations(RIGHT_ARC)
+        # do right arc
         s1 = self.stack[-1]
         b1 = self.buffer.pop(0)
         self.stack.append(b1)
-        self.arcs[b1] = s1
+        self.list_arcs[b1] = s1
+        # debug
         if self.debug:
             print("right arc")
             self.print_configuration()
 
     def shift(self):
-        self.update_configurations()
-        if len(self.stack) != 0:
-            self.moves.append(SHIFT)
-
+        self.update_configurations(SHIFT)
+        # do shift
         b1 = self.buffer.pop(0)
         self.stack.append(b1)
+        # debug
         if self.debug:
             print("shift")
             self.print_configuration()
 
     def reduce(self):
-        self.update_configurations()
-        self.moves.append(REDUCE)
-
+        self.update_configurations(REDUCE)
+        # do reduce 
         self.stack.pop()
+        # debug
         if self.debug:
             print("reduce")
             self.print_configuration()
@@ -117,40 +121,29 @@ class ArcEager:
         b = [self.sentence[i] for i in self.buffer]
         print(s, b)
         print(self.stack, self.buffer)
-        print(self.arcs)
+        print(self.list_arcs)
 
-    def get_moves(self):
-        return self.moves
-    def get_configurations(self):
-        """
-        return list of ALL configurations (start to end)
-        """ 
-        return self.configurations
-    def get_arcs(self):
+    def get_list_moves(self):
+        return self.list_moves
 
-        return self.arcs
+    def get_list_configurations(self):
+        return self.list_configurations
+
+    def get_list_arcs(self):
+        return self.list_arcs
     
     def get_configuration_now(self):
-        """
-        get current configuration
-        """
         if self.is_tree_final():
             conf=[-1,-1]
         else:
             conf=[self.stack[-1]]
-
             if len(self.buffer) == 0:
                 conf.append(-1)
             else:
                 conf.append(self.buffer[0])
-        
         return conf
         
-
-            
-
-        
-    
+######################################################################################################
 class Oracle:
     def __init__(self, parser, gold_tree:List[int]):
         self.parser = parser
@@ -163,7 +156,6 @@ class Oracle:
     else if there's a link k <-/-> j, k < i then return REDUCE
     else return SHIFT 
     """
-
     def is_left_arc_gold(self):
         # first element of the of the buffer is the gold head of the topmost element of the stack
         # if empty lists or if top has no head -> return False
@@ -197,7 +189,7 @@ class Oracle:
         if self.parser.stack[-1] == 0: # top is root
             return False
         if len(self.parser.buffer) == 0:
-            if self.parser.arcs[self.parser.stack[-1]] != -1 and self.parser.stack[-1] != 0:
+            if self.parser.list_arcs[self.parser.stack[-1]] != -1 and self.parser.stack[-1] != 0:
                 return True
             return False
 
@@ -234,8 +226,8 @@ class Oracle:
             self.parser.print_configuration()
             return None
 
-
-def generate_moves_configurations_heads(parser:ArcEager, oracle:Oracle):
+############################################################################################################
+def generate_gold(sentence:List[str], gold:List[int]):
     '''
     Generate moves configurations heads for a given parser and oracle
     
@@ -248,6 +240,9 @@ def generate_moves_configurations_heads(parser:ArcEager, oracle:Oracle):
         arcs: list of heads
         
     '''
+    parser:ArcEager=ArcEager(sentence)
+    oracle:Oracle=Oracle(parser, gold)
+
     while not parser.is_tree_final():
         if oracle.is_left_arc_gold():
             #print("left arc chosen")
@@ -262,13 +257,17 @@ def generate_moves_configurations_heads(parser:ArcEager, oracle:Oracle):
             #print("shift chosen")
             parser.shift()
         else:
-            print(f"NO MOVE in {i} sentence")
+            print("generate gold")
+            print(f"NO MOVE in sentence")
+            print("PREVIOUS CONFIGURATION")
             parser.print_configuration()
+            print("CURRENT CONFIGURATION")
+            print(parser.list_configurations[-2])
             break
         
-    return parser.get_moves(),parser.get_configurations(),  parser.get_arcs()
+    return parser.get_list_moves(),parser.get_list_configurations(),  parser.get_list_arcs()
 
-
+############################################################################################################
 if __name__ == "__main__":
     from datasets import load_dataset
     from utils import is_projective
@@ -280,14 +279,10 @@ if __name__ == "__main__":
         tokens=["<ROOT>"]+a["tokens"]
         heads=[-1]+list(map(int,a["head"]))
         
-        parser = ArcEager(tokens)
-        oracle = Oracle(parser, heads)
-        
-        _, _, arcs = generate_moves_configurations_heads(parser, oracle)
+        _, _, arcs = generate_gold(tokens, heads)
         
         if arcs != heads:
             print(f"ERROR HEADS in {i} sentence")
-            parser.print_configuration()
             errors=True
             break
     
