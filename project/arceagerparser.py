@@ -53,11 +53,11 @@ class ArcEager:
         self.list_moves=[]
         self.list_configurations = []
 
-        self.debug = debug
+        self.debug = debug 
         
         # Do first shift -> add ROOT to stack
         self.stack.append(self.buffer.pop(0))
-        if self.debug:
+        if self.debug :
             self.print_configuration()
             print("end configuration")
 
@@ -147,7 +147,7 @@ class ArcEager:
 class Oracle:
     def __init__(self, parser, gold_tree:List[int]):
         self.parser = parser
-        self.gold = gold_tree
+        self.gold = list(map(int,gold_tree))
 
     """
     i: top of stack, j: top of buffer
@@ -188,6 +188,8 @@ class Oracle:
         # stack empty  || top no head --> return False
         if self.parser.stack[-1] == 0: # top is root
             return False
+        if self.parser.list_arcs[self.parser.stack[-1]] == -1: # top has no head
+            return False
         if len(self.parser.buffer) == 0:
             if self.parser.list_arcs[self.parser.stack[-1]] != -1 and self.parser.stack[-1] != 0:
                 return True
@@ -224,6 +226,7 @@ class Oracle:
         else:
             print("NO MOVE")
             self.parser.print_configuration()
+            exit(-5)
             return None
 
 ############################################################################################################
@@ -275,11 +278,14 @@ if __name__ == "__main__":
     training_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
     training_dataset=training_dataset.filter(lambda x: is_projective([-1]+list(map(int,x["head"]))))
     
-    for i,a in enumerate(training_dataset):
+    for i,a in enumerate([training_dataset[0]]):
+
         tokens=["<ROOT>"]+a["tokens"]
         heads=[-1]+list(map(int,a["head"]))
-        
+        print(tokens)
+        print(heads)
         _, _, arcs = generate_gold(tokens, heads)
+        print(arcs)
         
         if arcs != heads:
             print(f"ERROR HEADS in {i} sentence")

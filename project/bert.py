@@ -35,7 +35,7 @@ def tok2subt_indices(l1:List[str], l2:List[str]):
     for token in l1:
         subtoken_indices = []
         # Get the indices of the subtokens
-        while index < len(l2) and (not subtoken_indices or l2[index].startswith("#")):
+        while index < len(l1) and (not subtoken_indices or l1[index].startswith("#")):
             subtoken_indices.append(index)
             index += 1
         # Append subtoken indices to output
@@ -93,7 +93,6 @@ def generate_all_golds(toks:List[List[str]], heads:List[List[int]], get_gold_pat
     [["<ROOT>"]+t for t in toks], 
     [[-1]+h for h in heads],
     ))
-  print("#################",t)
 
   movs, conf, arcs = zip(*t)
   return list(movs), list(conf), list(arcs)
@@ -122,7 +121,7 @@ def prepare_batch(batch_data,get_gold_path=False):
     )
 
     # get gold path and moves
-    configurations, moves, head = generate_all_golds(
+    moves, configurations, head = generate_all_golds(
         [bd["tokens"] for bd in batch_data],
         [bd["head"] for bd in batch_data],
         get_gold_path
@@ -144,7 +143,7 @@ def prepare_batch(batch_data,get_gold_path=False):
 # 
 
 # %%
-BATCH_SIZE = 32
+BATCH_SIZE = 256
 DIM_CONFIG = 2
 BERT_SIZE = 768
 EMBEDDING_SIZE = BERT_SIZE
@@ -319,8 +318,8 @@ if __name__=="__main__":
 
   # remove non projective
   train_dataset = train_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head'])))) 
-  validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
-  test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
+  #validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
+  #test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
   print(
       f"PROJECTIVE -> train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}" #type:ignore
   )   
@@ -331,7 +330,6 @@ if __name__=="__main__":
     shuffle=True,
     collate_fn=lambda x: prepare_batch(x, get_gold_path=True)
   )
-
   validation_dataloader = torch.utils.data.DataLoader( # type: ignore
     validation_dataset,
     batch_size=BATCH_SIZE,
@@ -392,3 +390,4 @@ if __name__=="__main__":
     # else:
     #     print("TEST PASSED")
         
+# %%
