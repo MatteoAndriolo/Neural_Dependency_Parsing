@@ -39,6 +39,7 @@ LEFT_ARC = 0
 RIGHT_ARC = 1
 REDUCE = 2
 SHIFT = 3
+NOMOVE = -1
 
 IS_FINAL = -1
 EMPTY = -1
@@ -49,11 +50,17 @@ class ArcEager:
         self.buffer = [i for i in range(len(self.sentence))]
         self.stack = []
 
+
         self.list_arcs = [-1 for _ in range(len(self.sentence))]
         self.list_moves=[]
         self.list_configurations = []
 
         self.debug = debug 
+        
+        ## check input correctness
+        if sentence[0] != "<ROOT>" :
+            print("ERROR: sentence must start with <ROOT>")
+            exit(-2)
         
         # Do first shift -> add ROOT to stack
         self.stack.append(self.buffer.pop(0))
@@ -63,6 +70,9 @@ class ArcEager:
 
     def update_configurations(self, move):
         ''' to do before each move '''
+        if move == NOMOVE:
+            self.list_configurations.append([EMPTY, EMPTY])
+            self.list_moves.append(NOMOVE)
         if len(self.stack)>0:
             self.list_configurations.append([
                 self.stack[-1],
@@ -114,7 +124,10 @@ class ArcEager:
             self.print_configuration()
 
     def is_tree_final(self):
-        return len(self.stack) == 1 and len(self.buffer) == 0
+        if len(self.list_configurations)>0:
+            if self.list_configurations[-1] == [EMPTY, EMPTY]:
+                return True
+        return (len(self.stack) == 1 and len(self.buffer) == 0) 
 
     def print_configuration(self):
         s = [self.sentence[i] for i in self.stack]
@@ -148,6 +161,11 @@ class Oracle:
     def __init__(self, parser, gold_tree:List[int]):
         self.parser = parser
         self.gold = list(map(int,gold_tree))
+
+        # Check correctness of input
+        if self.gold[0] != -1:
+            print("ERROR: gold tree must start with -1")
+            exit(-2)
 
     """
     i: top of stack, j: top of buffer
@@ -225,6 +243,8 @@ class Oracle:
             return SHIFT
         else:
             print("NO MOVE")
+            print(self.gold)
+            print(self.parser.list_arcs)
             self.parser.print_configuration()
             exit(-5)
             return None
@@ -274,12 +294,12 @@ def generate_gold(sentence:List[str], gold:List[int]):
 if __name__ == "__main__":
     from datasets import load_dataset
     from utils import is_projective
+    from bert import prepare_batch
     errors=False
-    training_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
+    training_dataset=load_dataset("universal_dependencies", "en_lines", split="train[:10]")
     training_dataset=training_dataset.filter(lambda x: is_projective([-1]+list(map(int,x["head"]))))
     
-    for i,a in enumerate([training_dataset[0]]):
-
+    for i,a in enumerate([training_dataset]):
         tokens=["<ROOT>"]+a["tokens"]
         heads=[-1]+list(map(int,a["head"]))
         print(tokens)

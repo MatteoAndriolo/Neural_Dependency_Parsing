@@ -22,7 +22,7 @@ def tok2subt_indices(l1:List[str], l2:List[str]):
     l1 = ["I", "like", "apples"]
     l2 = ["I", "like", "ap", "##ples"]
     token_corrispondence(l1, l2) -> [[0], [1], [2, 3]]
-    
+
     :param l1: list of tokens
     :param l2: list of subtokens
     :return: list of lists of indices of l2 that correspond to each token in l1
@@ -80,8 +80,8 @@ def generate_all_golds(toks:List[List[str]], heads:List[List[int]], get_gold_pat
   Generate moves configurations heads for a given parser and oracle
   
   input:
-      toks: list of tokens
-      heads: list of heads
+      toks: list of tokens | adds <ROOT> to each sentence
+      heads: list of heads | adds -1 to each sentence
       
   returns:
       moves: list of moves
@@ -90,11 +90,11 @@ def generate_all_golds(toks:List[List[str]], heads:List[List[int]], get_gold_pat
   '''
   t:List[Tuple[List, List, List]]= list(map(
     generate_gold,
-    [["<ROOT>"]+t for t in toks], 
-    [[-1]+h for h in heads],
+    toks,
+    heads,
     ))
 
-  movs, conf, arcs = zip(*t)
+  movs, conf, arcs = zip(*t) # transform matrix from nx3 to 3xn
   return list(movs), list(conf), list(arcs)
 
 def prepare_batch(batch_data,get_gold_path=False):
@@ -122,8 +122,8 @@ def prepare_batch(batch_data,get_gold_path=False):
 
     # get gold path and moves
     moves, configurations, head = generate_all_golds(
-        [bd["tokens"] for bd in batch_data],
-        [bd["head"] for bd in batch_data],
+        [["<ROOT>"]+bd["tokens"] for bd in batch_data],
+        [[-1]+bd["head"] for bd in batch_data],
         get_gold_path
     )
 
@@ -224,27 +224,34 @@ class BERTNet(nn.Module):
 
   
   def infere(self, bertInput):
+    print(2)
     bertInput=bertInput.to(self.device)
     input_ids=bertInput['input_ids'].to(self.device)
     attention_mask=bertInput['attention_mask'].to(self.device)
     merged_tokens=[subtok2tok(list(tokenizer.convert_ids_to_tokens(tok))) for tok in input_ids]
-
+    print(1)
     parsers:List[ArcEager] =[ArcEager(tok) for tok in merged_tokens]
     correspondences= list(map(
       tok2subt_indices,
       merged_tokens,
       list(map(list, map(tokenizer.convert_ids_to_tokens, input_ids)))
     ))
-
+    print(2)
     h = self.bert(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.to(self.device)
+    is_final=[False]
+    while not all(is_final):
+      for f,p in zip(is_final, parsers):
+        if f:
+          continue
+        # get the current configuration and score next moves
+        configurations = [[p.get_configuration_now()] for p in parsers]
+        mlp_input = self.get_mlp_input(configurations, h, correspondences).to(self.device)
+        mlp_out = self.mlp_pass(mlp_input).to(self.device)
+        # take the next parsing step
+        parse_step(parsers, mlp_out)
+      is_final = [p.is_tree_final() for p in parsers]
+      
     
-    while not all([t.is_tree_final() for t in parsers]):
-      # get the current configuration and score next moves
-      configurations = [p.get_configuration_now() for p in parsers]
-      mlp_input = self.get_mlp_input(configurations, h, correspondences).to(self.device)
-      mlp_out = self.mlp_pass(mlp_input).to(self.device)
-      # take the next parsing step
-      parse_step(parsers, mlp_out)
 
     # return the predicted dependency tree
     return [p.list_arcs for p in parsers]
@@ -277,6 +284,8 @@ def train(model:BERTNet, dataloader:torch.utils.data.DataLoader, criterion, opti
         loss.backward()
         optimizer.step()
         count += 1
+    print("total_loss", total_loss)
+    print("count", count)
     return total_loss / count
 
 
@@ -309,21 +318,22 @@ if __name__=="__main__":
   tokenizer.add_tokens(["<ROOT>", "<EMPTY>"], special_tokens=True)
 
   ## DATA
-  train_dataset=load_dataset("universal_dependencies", "en_lines", split="train")
-  validation_dataset=load_dataset("universal_dependencies", "en_lines", split="validation")
-  test_dataset=load_dataset("universal_dependencies", "en_lines", split="test")
+  train_dataset=load_dataset("universal_dependencies", "en_lines", split="train[:100]")
+  validation_dataset=load_dataset("universal_dependencies", "en_lines", split="validation[:100]")
+  test_dataset=load_dataset("universal_dependencies", "en_lines", split="test[:100]")
   print(
       f"train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}" #type:ignore
   ) 
 
   # remove non projective
   train_dataset = train_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head'])))) 
-  #validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
-  #test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
+  validation_dataset = validation_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
+  test_dataset = test_dataset.filter(lambda x:is_projective([-1]+list(map(int,x['head']))))
   print(
       f"PROJECTIVE -> train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}" #type:ignore
   )   
   
+  # dataloader definition
   train_dataloader = torch.utils.data.DataLoader( # type:ignore
     train_dataset,
     batch_size=BATCH_SIZE, 
@@ -336,7 +346,6 @@ if __name__=="__main__":
     shuffle=True,
     collate_fn=lambda x: prepare_batch(x, get_gold_path=True)
   )
-
   test_dataloader = torch.utils.data.DataLoader( # type:ignore
     test_dataset,
     batch_size=BATCH_SIZE,
@@ -344,30 +353,31 @@ if __name__=="__main__":
     collate_fn=lambda x: prepare_batch(x, get_gold_path=False)
   )
 
-  # %%
   model = BERTNet(device)
   criterion = nn.CrossEntropyLoss()
   optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
   with open("bert.log", "w") as f:
-      for epoch in range(EPOCHS):
-          print("Starting Epoch", epoch)
-          avg_train_loss = train(model, train_dataloader, criterion, optimizer)
-          torch.save(model.state_dict(), "bert.pt")
-          #avg_train_loss = -1
-          #torch.load(f"bert.pt")
-          val_uas = test(model, validation_dataloader)
+    for epoch in range(EPOCHS):
+        print("Starting Epoch", epoch)
+        avg_train_loss = train(model, train_dataloader, criterion, optimizer)
+        torch.save(model.state_dict(), "bert.pt")
+        #torch.load(f"bert.pt")
+        #val_uas = test(model, validation_dataloader)
+        log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f}\n"
+        print(log)
 
-          log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |\n"
-          print(log)
-          f.write(log)
+        # log= f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:.5f} | dev_uas: {val_uas:.5f} |\n"
+        # print(log)
+        # f.write(log)
 
-          #save the model on pytorch format
+        #save the model on pytorch format
 
-      test_uas = test(model, test_dataloader)
-      log = f"test_uas: {test_uas:5.3f}"
-      print(log)
-      f.write(log + "\n")
+    # print("Testing the model#################################################")
+    # test_uas = test(model, test_dataloader)
+    # log = f"test_uas: {test_uas:5.3f}"
+    # print(log)
+    # f.write(log + "\n")
       
       
     # from datasets import load_dataset
@@ -390,4 +400,3 @@ if __name__=="__main__":
     # else:
     #     print("TEST PASSED")
         
-# %%

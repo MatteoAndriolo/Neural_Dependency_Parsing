@@ -35,7 +35,7 @@ def is_projective(tree):
 
 
 
-from arceagerparser import LEFT_ARC,RIGHT_ARC,REDUCE,SHIFT,ArcEager, Oracle, generate_gold
+from arceagerparser import LEFT_ARC,RIGHT_ARC,REDUCE,SHIFT, NOMOVE,ArcEager, Oracle, generate_gold
 
 
 def evaluate(gold:List[List[int]], preds:List[List[int]]):
@@ -54,7 +54,7 @@ def evaluate(gold:List[List[int]], preds:List[List[int]]):
 from torch import sort as tsort, Tensor
 def parse_step(parsers:List[ArcEager], moves:Tensor):
     _, indices = tsort(moves, descending=True)
-    
+    # c=0
     for i in range(len(parsers)):
         noMove =True 
         for j in range(4):
@@ -78,10 +78,11 @@ def parse_step(parsers:List[ArcEager], moves:Tensor):
                     parsers[i].shift()
                     noMove = False;break;
         if noMove:
-            print(parsers[i].stack, parsers[i].buffer)
-            print("noMove was possible")
-            exit(-5)
-            
+            # print(parsers[i].stack, parsers[i].buffer)
+            # print("noMove was possible")
+            parsers[i].update_configurations(NOMOVE)
+            # print(c)
+            # c+=1
                 
 
 # In this function we select and perform the next move according to the scores obtained.
