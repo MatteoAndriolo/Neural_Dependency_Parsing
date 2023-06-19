@@ -52,13 +52,20 @@ class ArcEager:
             sentence: list of words | first word must be <ROOT>
             debug: if True print each move
         """
+        print(sentence)
+
+        if all([isinstance(x,str) for x in sentence]):
+            if sentence[0] != "<ROOT>":
+                raise Exception("ERROR: first word must be <ROOT>")
+        elif all([isinstance(x,int) for x in sentence]):
+            if sentence[0] != 1: # token of ROOT is 1
+                raise Exception("ERROR: first word must be -1")
+        else:
+            raise Exception("ERROR: sentence must be list of words or list of ints")
+            
         self.sentence = sentence
         self.buffer = [i for i in range(len(self.sentence))]
         self.stack = []
-
-        if sentence[0] != "<ROOT>":
-            print("ERROR: first word must be <ROOT>")
-            exit(-1)
 
         self.list_arcs = [-1 for _ in range(len(self.sentence))]
         self.list_moves=[]
@@ -118,9 +125,9 @@ class ArcEager:
         return move
 
     def is_tree_final(self):
-        if len(self.list_moves)>0 and self.list_moves[-1] == NOMOVE:
-            self.list_moves.pop()
-            return True
+        # if len(self.list_moves)>0 and self.list_moves[-1] == NOMOVE:
+        #     self.list_moves.pop()
+        #     return True
         return (len(self.stack) == 1 and len(self.buffer) == 0) 
 
     def print_configuration(self):
@@ -237,6 +244,18 @@ class Oracle:
             self.parser.print_configuration()
             exit(-5)
             return None
+
+def is_left_possible(parser):
+    return len(parser.stack) >= 1 and len(parser.buffer) >= 1 and parser.stack[-1] != 0
+
+def is_right_possible(parser):
+    return len(parser.stack) >= 1 and len(parser.buffer) >= 1
+
+def is_shift_possible(parser):
+    return len(parser.buffer) >= 1
+
+def is_reduce_possible(parser):
+    return len(parser.stack) >= 1 and parser.list_arcs[parser.stack[-1]] != -1
 
 ############################################################################################################
 def generate_gold(sentence:List[str], gold:List[int]):

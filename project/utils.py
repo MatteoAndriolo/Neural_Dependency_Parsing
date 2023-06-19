@@ -1,34 +1,20 @@
 from typing import List
 
-def check_bert_sentence(sentence):
-    if sentence[0] != "<ROOT>":
-        sentence = ["<ROOT>"] + sentence
-    return sentence
-
-def check_bert_heads(heads):
-    if heads[0] != -1:
-        heads = [-1] + heads
-    return heads
-
-def check_bert_format(sentence, heads):
-    return check_bert_sentence(sentence), check_bert_heads(heads)
-
-
-def is_projective(tree):
-    for i in range(len(tree)):
-        if tree[i] == -1:
+def is_projective(head):
+    for i in range(len(head)):
+        if head[i] == -1:
             continue
-        left = min(i, tree[i])
-        right = max(i, tree[i])
+        left = min(i, head[i])
+        right = max(i, head[i])
 
         for j in range(0, left):
-            if tree[j] > left and tree[j] < right:
+            if head[j] > left and head[j] < right:
                 return False
         for j in range(left + 1, right):
-            if tree[j] < left or tree[j] > right:
+            if head[j] < left or head[j] > right:
                 return False
-        for j in range(right + 1, len(tree)):
-            if tree[j] > left and tree[j] < right:
+        for j in range(right + 1, len(head)):
+            if head[j] > left and head[j] < right:
                 return False
 
     return True
@@ -50,39 +36,32 @@ def evaluate(gold:List[List[int]], preds:List[List[int]]):
 
     return correct / total
 
-
+from arceagerparser import is_left_possible, is_right_possible, is_reduce_possible, is_shift_possible
 from torch import sort as tsort, Tensor
+
 def parse_step(parsers:List[ArcEager], moves:Tensor):
     _, indices = tsort(moves, descending=True)
-    # c=0
+    list_moves=[]
     for i in range(len(parsers)):
         noMove =True 
+        if parsers[i].is_tree_final():
+           list_moves.append(NOMOVE) 
         for j in range(4):
-            cond_left=len(parsers[i].stack)>=1 and len(parsers[i].buffer)>=1 and parsers[i].stack[-1]!=0
-            cond_right=len(parsers[i].stack)>=1 and len(parsers[i].buffer)>=1
-            cond_shift=len(parsers[i].buffer)>=1
-            cond_reduce=len(parsers[i].stack)>=1 and parsers[i].list_arcs[parsers[i].stack[-1]]!=-1
-            if parsers[i].is_tree_final():
+            if indices[i][j] == LEFT_ARC and is_left_possible(parsers[i]):
+                list_moves.append(LEFT_ARC)
                 noMove = False;break;
-            else:
-                if indices[i][j] == LEFT_ARC and cond_left:
-                    parsers[i].left_arc()
-                    noMove = False;break;
-                elif indices[i][j] == RIGHT_ARC and cond_right:
-                    parsers[i].right_arc()
-                    noMove = False;break;
-                elif indices[i][j] == REDUCE and cond_reduce:
-                    parsers[i].reduce()
-                    noMove = False;break;
-                elif indices[i][j] == SHIFT and cond_shift :
-                    parsers[i].shift()
-                    noMove = False;break;
+            elif indices[i][j] == RIGHT_ARC and is_right_possible(parsers[i]):
+                list_moves.append(RIGHT_ARC)
+                noMove = False;break;
+            elif indices[i][j] == REDUCE and is_reduce_possible(parsers[i]):
+                list_moves.append(REDUCE)
+                noMove = False;break;
+            elif indices[i][j] == SHIFT and is_shift_possible(parsers[i]) :
+                list_moves.append(SHIFT)
+                noMove = False;break;
         if noMove:
-            # print(parsers[i].stack, parsers[i].buffer)
-            # print("noMove was possible")
-            parsers[i].update_configurations(NOMOVE)
-            # print(c)
-            # c+=1
+            list_moves.append(NOMOVE)
+    return list_moves
                 
 
 # In this function we select and perform the next move according to the scores obtained.
