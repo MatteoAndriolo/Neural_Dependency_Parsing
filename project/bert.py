@@ -35,7 +35,7 @@ from arceagerparser import (
 # %%
 class NNParameters():
   def __init__(self) -> None:
-      self.BATCH_SIZE = 10
+      self.BATCH_SIZE = 256
       self.BERT_SIZE = 768
       self.EMBEDDING_SIZE = self.BERT_SIZE
       self.DIM_CONFIG = 2
@@ -298,6 +298,7 @@ def test(model: BERTNet, dataloader: torch.utils.data.dataloader):  # type:ignor
 # %%
 
 if __name__ == "__main__":
+  start_time=time.time()
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
   print(device)
   torch.manual_seed(99)
@@ -306,9 +307,9 @@ if __name__ == "__main__":
   tokenizer.add_tokens(["<ROOT>", "<EMPTY>"], special_tokens=True)
   
   ## Download data
-  train_dataset = load_dataset("universal_dependencies", "en_lines", split="train[:100]")
-  test_dataset = load_dataset("universal_dependencies", "en_lines", split="test[:50]")
-  validation_dataset = load_dataset("universal_dependencies", "en_lines", split="validation[:50]")
+  train_dataset = load_dataset("universal_dependencies", "en_lines", split="train")
+  test_dataset = load_dataset("universal_dependencies", "en_lines", split="test")
+  validation_dataset = load_dataset("universal_dependencies", "en_lines", split="validation")
   print(
       f"train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}" # type:ignore
   )  
@@ -368,5 +369,7 @@ if __name__ == "__main__":
   log = "test_uas: {:5.3f}".format(test_uas)
   print(log)
   train(model, train_dataloader, criterion, optimizer)
+  
+  print("--- %s seconds ---" % (time.time() - start_time))
 
   
