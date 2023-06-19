@@ -39,26 +39,28 @@ def evaluate(gold:List[List[int]], preds:List[List[int]]):
 from arceagerparser import is_left_possible, is_right_possible, is_reduce_possible, is_shift_possible
 from torch import sort as tsort, Tensor
 
-def parse_step(parsers:List[ArcEager], moves:Tensor):
+def parse_moves(parsers:List[ArcEager], moves:Tensor):
     _, indices = tsort(moves, descending=True)
     list_moves=[]
     for i in range(len(parsers)):
         noMove =True 
         if parsers[i].is_tree_final():
            list_moves.append(NOMOVE) 
-        for j in range(4):
-            if indices[i][j] == LEFT_ARC and is_left_possible(parsers[i]):
-                list_moves.append(LEFT_ARC)
-                noMove = False;break;
-            elif indices[i][j] == RIGHT_ARC and is_right_possible(parsers[i]):
-                list_moves.append(RIGHT_ARC)
-                noMove = False;break;
-            elif indices[i][j] == REDUCE and is_reduce_possible(parsers[i]):
-                list_moves.append(REDUCE)
-                noMove = False;break;
-            elif indices[i][j] == SHIFT and is_shift_possible(parsers[i]) :
-                list_moves.append(SHIFT)
-                noMove = False;break;
+           continue
+        else:
+            for j in range(4):
+                if indices[i][j] == LEFT_ARC and is_left_possible(parsers[i]):
+                    list_moves.append(LEFT_ARC)
+                    noMove = False;break;
+                elif indices[i][j] == RIGHT_ARC and is_right_possible(parsers[i]):
+                    list_moves.append(RIGHT_ARC)
+                    noMove = False;break;
+                elif indices[i][j] == REDUCE and is_reduce_possible(parsers[i]):
+                    list_moves.append(REDUCE)
+                    noMove = False;break;
+                elif indices[i][j] == SHIFT and is_shift_possible(parsers[i]) :
+                    list_moves.append(SHIFT)
+                    noMove = False;break;
         if noMove:
             list_moves.append(NOMOVE)
     return list_moves

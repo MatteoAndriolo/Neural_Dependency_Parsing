@@ -52,8 +52,6 @@ class ArcEager:
             sentence: list of words | first word must be <ROOT>
             debug: if True print each move
         """
-        print(sentence)
-
         if all([isinstance(x,str) for x in sentence]):
             if sentence[0] != "<ROOT>":
                 raise Exception("ERROR: first word must be <ROOT>")
@@ -73,6 +71,7 @@ class ArcEager:
 
         # Do first shift -> add ROOT to stack
         self.stack.append(self.buffer.pop(0))
+        self.is_finished=False
 
     def update_configurations(self, move):
         ''' to do before each move '''
@@ -94,6 +93,9 @@ class ArcEager:
         self.list_arcs[s1] = b1
 
     def right_arc(self):
+        if not is_right_possible(self):
+            self.nomove()
+            return
         self.update_configurations(RIGHT_ARC)
         s1 = self.stack[-1]
         b1 = self.buffer.pop(0)
@@ -109,6 +111,7 @@ class ArcEager:
         self.stack.pop()
 
     def nomove(self):
+        self.is_finished=True
         self.update_configurations(NOMOVE)
 
     def do_move(self, move:int):
@@ -125,10 +128,7 @@ class ArcEager:
         return move
 
     def is_tree_final(self):
-        # if len(self.list_moves)>0 and self.list_moves[-1] == NOMOVE:
-        #     self.list_moves.pop()
-        #     return True
-        return (len(self.stack) == 1 and len(self.buffer) == 0) 
+        return self.is_finished or (len(self.stack) == 1 and len(self.buffer) == 0) 
 
     def print_configuration(self):
         s = [self.sentence[i] for i in self.stack]

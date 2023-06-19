@@ -12,7 +12,7 @@ from datasets import Dataset, DatasetDict, IterableDataset, IterableDatasetDict
 MyDatasetType = Dataset | DatasetDict | IterableDataset | IterableDatasetDict
 import time
 
-from utils import is_projective, evaluate, parse_step
+from utils import is_projective, evaluate, parse_moves
 from arceagerparser import (
     ArcEager,
     Oracle,
@@ -217,18 +217,16 @@ class BiLSTMNet(nn.Module):
 
     start_time=time.time()
     is_final = [False] 
-    while not all([t.is_tree_final() for t in parsers]):
+    while not all(is_final):
       # get the current configuration and score next moves
       configurations = [[p.get_configuration_now()] for p in parsers]
       mlp_input = self.get_mlp_input(configurations, h)
       mlp_out = self.mlp_pass(mlp_input)
       # take the next parsing step
-      list_moves=parse_step(parsers, mlp_out)
+      list_moves= parse_moves(parsers, mlp_out)
       for i,m in enumerate(list_moves):
-          if m==NOMOVE:
-              continue
           parsers[i].do_move(m)
-          
+      is_final=[t.is_tree_final() for t in parsers]
           
     print("time parse", time.time()-start_time)
 
@@ -362,7 +360,6 @@ if __name__ == "__main__":
   test_uas = test(model, test_dataloader)
   log = "test_uas: {:5.3f}".format(test_uas)
   print(log)
-  f.write(log + "\n")
   train(model, train_dataloader, criterion, optimizer)
 
   
