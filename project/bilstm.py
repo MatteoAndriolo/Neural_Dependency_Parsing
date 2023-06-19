@@ -33,7 +33,7 @@ from arceagerparser import (
 # %%
 class NNParameters():
   def __init__(self) -> None:
-      self.BATCH_SIZE = 10
+      self.BATCH_SIZE = 128
       self.EMBEDDING_SIZE = 200
       self.LSTM_SIZE = 200
       self.LSTM_LAYERS = 2
@@ -296,9 +296,9 @@ if __name__ == "__main__":
   torch.manual_seed(99)
   
   ## Download data
-  train_dataset = load_dataset("universal_dependencies", "en_lines", split="train[:200]")
-  test_dataset = load_dataset("universal_dependencies", "en_lines", split="test[:100]")
-  validation_dataset = load_dataset("universal_dependencies", "en_lines", split="validation[:100]")
+  train_dataset = load_dataset("universal_dependencies", "en_lines", split="train")
+  test_dataset = load_dataset("universal_dependencies", "en_lines", split="test")
+  validation_dataset = load_dataset("universal_dependencies", "en_lines", split="validation")
   print(
       f"train_dataset: {len(train_dataset)}, validation_dataset: {len(validation_dataset)}, test_dataset: {len(test_dataset)}" # type:ignore
   )  
