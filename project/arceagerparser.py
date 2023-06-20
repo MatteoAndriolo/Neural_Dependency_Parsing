@@ -72,11 +72,13 @@ class ArcEager:
         # Do first shift -> add ROOT to stack
         self.stack.append(self.buffer.pop(0))
         self.is_finished=False
+        
+        self.empty_conf=[EMPTY,EMPTY,EMPTY,EMPTY]
 
     def update_configurations(self, move):
         ''' to do before each move '''
         if move == NOMOVE:
-            self.list_configurations.append([EMPTY,EMPTY, EMPTY,EMPTY])
+            self.list_configurations.append(self.empty_conf)
             self.list_moves.append(NOMOVE)
         if len(self.stack)>0:
             self.list_configurations.append([
@@ -150,7 +152,7 @@ class ArcEager:
     
     def get_configuration_now(self):
         if self.is_tree_final():
-            conf=[-1,-1]
+            conf=self.empty_conf
         else:
             conf=self.list_configurations[-1] if len(self.list_configurations)>0 else [EMPTY,EMPTY,EMPTY,EMPTY]
         return conf
