@@ -76,12 +76,14 @@ class ArcEager:
     def update_configurations(self, move):
         ''' to do before each move '''
         if move == NOMOVE:
-            self.list_configurations.append([EMPTY, EMPTY])
+            self.list_configurations.append([EMPTY,EMPTY, EMPTY,EMPTY])
             self.list_moves.append(NOMOVE)
         if len(self.stack)>0:
             self.list_configurations.append([
+                self.stack[-2] if len(self.stack)>1 else EMPTY,
                 self.stack[-1],
-                self.buffer[0] if len(self.buffer)>0 else EMPTY
+                self.buffer[0] if len(self.buffer)>0 else EMPTY,
+                self.buffer[1] if len(self.buffer)>1 else EMPTY
             ])
             self.list_moves.append(move)
             
@@ -150,11 +152,7 @@ class ArcEager:
         if self.is_tree_final():
             conf=[-1,-1]
         else:
-            conf=[self.stack[-1]]
-            if len(self.buffer) == 0:
-                conf.append(-1)
-            else:
-                conf.append(self.buffer[0])
+            conf=self.list_configurations[-1] if len(self.list_configurations)>0 else [EMPTY,EMPTY,EMPTY,EMPTY]
         return conf
         
 ######################################################################################################

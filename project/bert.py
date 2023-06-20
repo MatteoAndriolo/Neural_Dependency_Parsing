@@ -38,7 +38,7 @@ class NNParameters():
       self.BATCH_SIZE = 256
       self.BERT_SIZE = 768
       self.EMBEDDING_SIZE = self.BERT_SIZE
-      self.DIM_CONFIG = 2
+      self.DIM_CONFIG = 4
       self.MLP1_IN_SIZE = self.DIM_CONFIG * self.EMBEDDING_SIZE
       self.MLP2_IN_SIZE = 300
       self.OUT_CLASSES = 4
@@ -66,7 +66,7 @@ def extract_att(data:List[NNData], attribute:str):
 
 
 # %%
-def process_sample(sample, sentence, iid, get_gold_path=False):
+def process_sample(sample, sentence, iid, get_gold=False):
     """
     Process a sample from the dataset
     1. Add ["<ROOT>"] to the beginning of the sentence and [-1] to the beginning of the head
@@ -100,15 +100,15 @@ def process_sample(sample, sentence, iid, get_gold_path=False):
     # embedding ids of sentence words
     subw2word_idx=calcualate_subw2word_idx(iid)
 
-    if get_gold_path:
-        gold_moves, gold_path, _= generate_gold(sentence, head) # transform matrix from nx3 to 3xn
+    if get_gold:
+        gold_moves, gold_conf, _= generate_gold(sentence, head) # transform matrix from nx3 to 3xn
     else:
-        gold_path, gold_moves = [], []
+        gold_conf, gold_moves = [], []
 
-    return head, gold_path, gold_moves, subw2word_idx
+    return head, gold_conf, gold_moves, subw2word_idx
 
 
-def process_batch(batch:List[List], tokenizer, get_gold_path:bool=False) :
+def process_batch(batch:List[List], tokenizer, get_gold:bool=False) :
   pack:List[NNData]=[]
   sentences=[["<ROOT>"]+ bd["tokens"] for bd in batch]
 
@@ -127,7 +127,7 @@ def process_batch(batch:List[List], tokenizer, get_gold_path:bool=False) :
   ## What is left? heads, gold_path, gold_moves, subw2word_idx
   ## What i need? sample -> heads, original sentence -> golds, input_ids -> subw2word_idx
   for sample, sentence, iid in zip(batch,sentences,token_ids):
-    head, configuration, moves, s2w= process_sample(sample, sentence,iid, get_gold_path=get_gold_path)
+    head, configuration, moves, s2w= process_sample(sample, sentence,iid, get_gold=get_gold)
     pack.append(NNData(sentence, configuration, moves, head, s2w))
 
   return output_tokenizer, pack
@@ -179,6 +179,8 @@ class BERTNet(nn.Module):
                       [
                           zero_tensor if j[0] == -1 else self.get_embedding(h[i], subw2idx[i][j[0]]),
                           zero_tensor if j[1] == -1 else self.get_embedding(h[i], subw2idx[i][j[1]]),
+                          zero_tensor if j[2] == -1 else self.get_embedding(h[i], subw2idx[i][j[1]]),
+                          zero_tensor if j[3] == -1 else self.get_embedding(h[i], subw2idx[i][j[1]]),
                       ]
                   )
               )
@@ -327,19 +329,19 @@ if __name__ == "__main__":
     train_dataset,
     batch_size=nnp.BATCH_SIZE, 
     shuffle=True,
-    collate_fn=lambda x: process_batch(x, tokenizer, get_gold_path=True)
+    collate_fn=lambda x: process_batch(x, tokenizer, get_gold=True)
   )
   validation_dataloader= torch.utils.data.DataLoader(
     validation_dataset,
     batch_size=nnp.BATCH_SIZE,
     shuffle=True,
-    collate_fn=lambda x: process_batch(x,tokenizer, get_gold_path=True)
+    collate_fn=lambda x: process_batch(x,tokenizer, get_gold=True)
   )
   test_dataloader= torch.utils.data.DataLoader(
     test_dataset,
     batch_size=nnp.BATCH_SIZE,
     shuffle=True,
-    collate_fn=lambda x: process_batch(x, tokenizer, get_gold_path=False)
+    collate_fn=lambda x: process_batch(x, tokenizer, get_gold=False)
   )
     
   # for b in train_dataloader: 
