@@ -42,7 +42,7 @@ class NNParameters():
       self.MLP1_IN_SIZE = self.DIM_CONFIG * self.EMBEDDING_SIZE
       self.MLP2_IN_SIZE = 300
       self.OUT_CLASSES = 4
-      
+      self.FREEZE = True
       self.DROP_OUT = 0.2
       self.LR = 0.01
       self.EPOCHS = 50
@@ -154,8 +154,9 @@ class BERTNet(nn.Module):
     self.bert.resize_token_embeddings(len(tokenizer))
     
     # Freeze bert layers
-    for param in self.bert.parameters():
-      param.requires_grad = False
+    if nnp.FREEZE:
+      for param in self.bert.parameters():
+        param.requires_grad = False
     
     self.w1 = nn.Linear(nnp.MLP1_IN_SIZE, nnp.MLP2_IN_SIZE, bias=True)
     self.activation = nn.Tanh()
@@ -359,8 +360,12 @@ if __name__ == "__main__":
     avg_train_loss = train(model, train_dataloader, criterion, optimizer)
     if epoch % 5 == 0:
       val_uas = test(model, validation_dataloader)
+      if avg_train_loss < 1:
+        nnp.FREEZE = not nnp.FREEZE 
+        nnp.BATCH_SIZE = 256 if nnp.FREEZE else 32
     else:
       val_uas = -1
+      
 
     log = f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:5.3f} | dev_uas: {val_uas:5.3f} |"
     print(log)
