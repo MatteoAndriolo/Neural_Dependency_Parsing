@@ -44,8 +44,8 @@ class NNParameters():
       self.OUT_CLASSES = 4
       
       self.DROP_OUT = 0.2
-      self.LR = 0.001
-      self.EPOCHS = 30
+      self.LR = 0.01
+      self.EPOCHS = 50
 
 nnp = NNParameters()
 
@@ -357,7 +357,10 @@ if __name__ == "__main__":
     print("Starting Epoch", epoch)
     # torch.load(f"bilstm_e{epoch+1}.pt")
     avg_train_loss = train(model, train_dataloader, criterion, optimizer)
-    val_uas = test(model, validation_dataloader)
+    if epoch % 5 == 0:
+      val_uas = test(model, validation_dataloader)
+    else:
+      val_uas = -1
 
     log = f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:5.3f} | dev_uas: {val_uas:5.3f} |"
     print(log)
