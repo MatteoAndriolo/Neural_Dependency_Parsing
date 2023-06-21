@@ -358,7 +358,7 @@ class NNParameters():
   def __init__(self) -> None:
       self.BATCH_SIZE = BATCH_SIZE
       self.EMBEDDING_SIZE = 200
-      self.FREEZE = TRUE
+      self.FREEZE = True
       self.LSTM_SIZE = 200
       self.LSTM_LAYERS = 2
       self.MLP_OUT_SIZE = self.LSTM_LAYERS * self.LSTM_SIZE
@@ -366,7 +366,7 @@ class NNParameters():
       
       self.DROP_OUT = 0.2
       self.LR = 0.001
-      self.EPOCHS = 30
+      self.EPOCHS = 1
 
 nnp = NNParameters()
 
@@ -669,7 +669,7 @@ class NNParameters():
       self.FREEZE = True
       self.DROP_OUT = 0.2
       self.LR = 0.01
-      self.EPOCHS = 50
+      self.EPOCHS = 1
 
 nnp = NNParameters()
 
@@ -922,4 +922,3 @@ print("--- %s seconds ---" % (time.time() - start_time))
 
 
 
-# %%
