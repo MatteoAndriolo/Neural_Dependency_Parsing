@@ -1,44 +1,27 @@
 from typing import List
 
-def is_projective(tree):
-    for i in range(len(tree)):
-        if tree[i] == -1:
+def is_projective(head):
+    for i in range(len(head)):
+        if head[i] == -1:
             continue
-        left = min(i, tree[i])
-        right = max(i, tree[i])
+        left = min(i, head[i])
+        right = max(i, head[i])
 
         for j in range(0, left):
-            if tree[j] > left and tree[j] < right:
+            if head[j] > left and head[j] < right:
                 return False
         for j in range(left + 1, right):
-            if tree[j] < left or tree[j] > right:
+            if head[j] < left or head[j] > right:
                 return False
-        for j in range(right + 1, len(tree)):
-            if tree[j] > left and tree[j] < right:
+        for j in range(right + 1, len(head)):
+            if head[j] > left and head[j] < right:
                 return False
 
     return True
 
 
 
-from arceagerparser import LEFT_ARC,RIGHT_ARC,REDUCE,SHIFT,EMPTY, ArcEager, Oracle, generate_moves_configurations_heads
-def generate_gold_pathmoves(sentence:List[str], gold:List[int]) -> tuple[List[List[int]], List[int]]:
-    '''
-    input:
-      sentence: list of tokens
-      gold: list of heads
-    
-    returns:
-      gold_configurations: list of configurations
-      gold_moves: list of moves
-    '''
-    parser = ArcEager(sentence)
-    oracle = Oracle(parser, gold)
-  
-    moves, configurations, _ = generate_moves_configurations_heads(parser, oracle)
-
-    return configurations,moves 
-
+from arceagerparser import LEFT_ARC,RIGHT_ARC,REDUCE,SHIFT, NOMOVE,ArcEager, Oracle, generate_gold
 
 
 def evaluate(gold:List[List[int]], preds:List[List[int]]):
@@ -53,38 +36,34 @@ def evaluate(gold:List[List[int]], preds:List[List[int]]):
 
     return correct / total
 
-
+from arceagerparser import is_left_possible, is_right_possible, is_reduce_possible, is_shift_possible
 from torch import sort as tsort, Tensor
-def parse_step(parsers:List[ArcEager], moves:Tensor):
+
+def parse_moves(parsers:List[ArcEager], moves:Tensor):
     _, indices = tsort(moves, descending=True)
-    
+    list_moves=[]
     for i in range(len(parsers)):
         noMove =True 
-        for j in range(4):
-            cond_left=len(parsers[i].stack)>=1 and len(parsers[i].buffer)>=1 and parsers[i].stack[-1]!=0
-            cond_right=len(parsers[i].stack)>=1 and len(parsers[i].buffer)>=1
-            cond_shift=len(parsers[i].buffer)>=1
-            cond_reduce=len(parsers[i].stack)>=1 and parsers[i].arcs[parsers[i].stack[-1]]!=-1
-            if parsers[i].is_tree_final():
-                noMove = False;break;
-            else:
-                if indices[i][j] == LEFT_ARC and cond_left:
-                    parsers[i].left_arc()
+        if parsers[i].is_tree_final():
+           list_moves.append(NOMOVE) 
+           continue
+        else:
+            for j in range(4):
+                if indices[i][j] == LEFT_ARC and is_left_possible(parsers[i]):
+                    list_moves.append(LEFT_ARC)
                     noMove = False;break;
-                elif indices[i][j] == RIGHT_ARC and cond_right:
-                    parsers[i].right_arc()
+                elif indices[i][j] == RIGHT_ARC and is_right_possible(parsers[i]):
+                    list_moves.append(RIGHT_ARC)
                     noMove = False;break;
-                elif indices[i][j] == REDUCE and cond_reduce:
-                    parsers[i].reduce()
+                elif indices[i][j] == REDUCE and is_reduce_possible(parsers[i]):
+                    list_moves.append(REDUCE)
                     noMove = False;break;
-                elif indices[i][j] == SHIFT and cond_shift :
-                    parsers[i].shift()
+                elif indices[i][j] == SHIFT and is_shift_possible(parsers[i]) :
+                    list_moves.append(SHIFT)
                     noMove = False;break;
         if noMove:
-            print(parsers[i].stack, parsers[i].buffer)
-            print("noMove was possible")
-            exit(-5)
-            
+            list_moves.append(NOMOVE)
+    return list_moves
                 
 
 # In this function we select and perform the next move according to the scores obtained.
@@ -92,82 +71,72 @@ def parse_step(parsers:List[ArcEager], moves:Tensor):
 # is empty or a left arc if σ2 is the ROOT. For clarity sake we didn't implement
 # these checks in the parser so we must do them here. This renders the function quite ugly
 # 0 Lx; 1 Rx, 2 shifr; 3 reduce
-def parse_step_2(parsers: List[ArcEager], moves:List[List[int]]):
-    moves_argm = moves.argmax(-1)
+def parse_moves_2(parsers: List[ArcEager], moves:Tensor):
+    _, indices = tsort(moves, descending=True)
+    moves_argm= [indices[i][0] for i in range(len(parsers))]
+    list_moves=[]
+
     for i in range(len(parsers)):
         noMove = False
         # Conditions
-        cond_left = (
-            len(parsers[i].stack)>0
-            and len(parsers[i].buffer)>0
-            and parsers[i].stack[-1] != 0
-        )
-        cond_right = len(parsers[i].stack)>0 and len(parsers[i].buffer)>0
-        cond_reduce = len(parsers[i].stack)>0 and parsers[i].stack[-1] != 0
-        cond_shift = len(parsers[i].buffer) > 0
         if parsers[i].is_tree_final():
             continue
         else:
             if moves_argm[i] == LEFT_ARC:
 #------------------------------ firdt condition to check is the left arc -> right arc -> shift -> reduce------------------------------
-                if cond_left:
-                    parsers[i].left_arc()
+                if is_left_possible(parsers[i]):
+                    list_moves.append(LEFT_ARC)
                 else:
-                    if cond_right:
-                        parsers[i].right_arc()
-                    elif cond_reduce:
-                        parsers[i].reduce()
-                    elif cond_shift:
-                        parsers[i].shift()
+                    if is_right_possible(parsers[i]):
+                        list_moves.append(RIGHT_ARC)
+                    elif is_reduce_possible(parsers[i]):
+                        list_moves.append(REDUCE)
+                    elif is_shift_possible(parsers[i]):
+                        list_moves.append(SHIFT)
                     else:
+                        list_moves.append(NOMOVE)
                         print("noMove was possible on left")
 #------------------------------ firdt condition to check is the right arc -> shift -> reduce------------------------------
             if moves_argm[i] == RIGHT_ARC:
                 #print("right")
-                if cond_right:
-                    parsers[i].right_arc()
+                if is_right_possible(parsers[i]):
+                    list_moves.append(RIGHT_ARC)
                 else:
-                    if cond_reduce:
-                        parsers[i].reduce() 
-                    elif cond_shift:
-                        parsers[i].shift()
+                    if is_reduce_possible(parsers[i]):
+                        list_moves.append(REDUCE)
+                    elif is_shift_possible(parsers[i]):
+                        list_moves.append(SHIFT)
                     else:
+                        list_moves.append(NOMOVE)
                         print("noMove was possible on right")
+
 #------------------------------ firdt condition to check is the shift -> reduce------------------------------
             if moves_argm[i] == SHIFT:
-                if cond_shift:
-                    parsers[i].shift()
-                elif cond_reduce:
-                    parsers[i].reduce()
+                if is_shift_possible(parsers[i]):
+                    list_moves.append(SHIFT)
+                elif is_reduce_possible(parsers[i]):
+                    list_moves.append(REDUCE)
                 else:
+                    list_moves.append(NOMOVE)   
                     print("noMove was possible on shift")
 #------------------------------ firdt condition to check is the reduce and if no reduce was possible take in account the probabilities ------------------------------
             if moves_argm[i] == REDUCE:
-                if cond_reduce:
-                    parsers[i].reduce()
+                if is_reduce_possible(parsers[i]):
+                    list_moves.append(REDUCE)
                 else:
-                    if moves[i][0] > moves[i][1] and moves[i][0] > moves[i][2] and cond_left:
-                        parsers[i].left_arc()
+                    if moves[i][0] > moves[i][1] and moves[i][0] > moves[i][2] and is_left_possible(parsers[i]):
+                        list_moves.append(LEFT_ARC)
                     else:
-                        if moves[i][1] > moves[i][2] and cond_right:
-                            parsers[i].right_arc()
+                        if moves[i][1] > moves[i][2] and is_right_possible(parsers[i]):
+                            list_moves.append(RIGHT_ARC)
                         else:
-                            if cond_shift:
-                                parsers[i].shift()
+                            if is_shift_possible(parsers[i]):
+                                list_moves.append(SHIFT)
                             else:
-                                print(moves[i][0], moves[i][1], moves[i][2], cond_left, cond_right, cond_shift)
+                                print(moves[i][0], moves[i][1], moves[i][2], is_left_possible(parsers[i]), is_right_possible(parsers[i]), is_shift_possible(parsers[i]))
+    return list_moves
                                 
                                 
-def get_configurations(parsers:List[ArcEager]):
-    '''
-    Returns the current configuration of each parser in the list
-    '''
-    configurations = []
-    for parser in parsers:
-        configurations.append([parser.get_configuration_now()])
-    return configurations
-
-
 if __name__== "__main__":
     from datasets import load_dataset
     from utils import is_projective
