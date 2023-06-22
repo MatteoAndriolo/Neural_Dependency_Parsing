@@ -354,21 +354,6 @@ print(
 # BiLSTM
 
 # %%
-class NNParameters():
-  def __init__(self) -> None:
-      self.BATCH_SIZE = BATCH_SIZE
-      self.EMBEDDING_SIZE = 200
-      self.FREEZE = True
-      self.LSTM_SIZE = 200
-      self.LSTM_LAYERS = 2
-      self.MLP_OUT_SIZE = self.LSTM_LAYERS * self.LSTM_SIZE
-      self.OUT_CLASSES = 4
-      
-      self.DROP_OUT = 0.2
-      self.LR = 0.001
-      self.EPOCHS = 1
-
-nnp = NNParameters()
 
 class NNData():
   def __init__(self, tokens, confs, moves, heads) -> None:
@@ -465,8 +450,11 @@ def train(model: nn.Module, dataloader, criterion, optimizer):
     optimizer.zero_grad()
     
     out = model(batch)
+    if isinstance(batch[0], NNData):
+        moves= extract_att(batch, "moves")
+    else:
+        moves=extract_att(batch[1],"moves")
 
-    moves= extract_att(batch, "moves")
     labels = torch.tensor(sum(moves, [])).to(
         device
     )  # sum(moves, []) flatten the array
@@ -513,6 +501,23 @@ def test(model, dataloader: torch.utils.data.dataloader):  # type:ignore
 # Network definition
 
 # %%
+class NNParameters(): 
+    def __init__(self) -> None:
+      self.BATCH_SIZE = BATCH_SIZE
+      self.EMBEDDING_SIZE = 200
+      self.FREEZE = True
+      self.LSTM_SIZE = 200
+      self.LSTM_LAYERS = 2
+
+      self.MLP_OUT_SIZE = self.LSTM_LAYERS * self.LSTM_SIZE
+      self.OUT_CLASSES = 4
+      
+      self.DROP_OUT = 0.2
+      self.LR = 0.001
+      self.EPOCHS = 1
+
+nnp = NNParameters()
+
 class BiLSTMNet(nn.Module):
   def __init__(self,device, dictionary,  *args, **kwargs) -> None:
     super().__init__(*args, **kwargs)
@@ -531,9 +536,9 @@ class BiLSTMNet(nn.Module):
       dropout=nnp.DROP_OUT,
     )
     
-    self.w1 = nn.Linear(2 * nnp.LSTM_LAYERS * nnp.LSTM_SIZE, nnp.MLP_OUT_SIZE, bias=True)
+    self.w1 = nn.Linear(2 * nnp.LSTM_LAYERS * nnp.LSTM_SIZE , 100  , bias=True)
     self.activation = nn.Tanh()
-    self.w2 = nn.Linear(nnp.MLP_OUT_SIZE, nnp.OUT_CLASSES, bias=True)
+    self.w2 = nn.Linear(100, nnp.OUT_CLASSES, bias=True)
     self.softmax = nn.Softmax(dim=-1)
     self.dropout = nn.Dropout(nnp.DROP_OUT)
   
@@ -637,7 +642,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=nnp.LR)
 
 for epoch in range(nnp.EPOCHS):
-  print("Starting Epoch", epoch)
+  print(f"Starting Epoch {epoch+1}/{nnp.EPOCHS}")
   # torch.load(f"bilstm_e{epoch+1}.pt")
   avg_train_loss = train(model, train_dataloader, criterion, optimizer)
   val_uas = test(model, validation_dataloader)
@@ -785,9 +790,9 @@ class BERTNet(nn.Module):
       for param in self.bert.parameters():
         param.requires_grad = False
     
-    self.w1 = nn.Linear(nnp.MLP1_IN_SIZE, nnp.MLP2_IN_SIZE, bias=True)
+    self.w1 = nn.Linear(1536, 300, bias=True)
     self.activation = nn.Tanh()
-    self.w2 = nn.Linear(nnp.MLP2_IN_SIZE, nnp.OUT_CLASSES, bias=True)
+    self.w2 = nn.Linear(300, 4 ,bias=True)
     self.softmax = nn.Softmax(dim=-1)
     self.dropout = nn.Dropout(nnp.DROP_OUT)
   
@@ -922,3 +927,5 @@ print("--- %s seconds ---" % (time.time() - start_time))
 
 
 
+
+# %%
