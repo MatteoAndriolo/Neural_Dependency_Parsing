@@ -471,8 +471,9 @@ def process_batch(
 def train(model: nn.Module, dataloader, criterion, optimizer):
     model.train()
     total_loss = 0
-    count = 1
+    count=0
     for batch in dataloader:
+        count+=1
         print(f"TRAIN: batch {count}/{len(dataloader):.0f}")
         optimizer.zero_grad()
 
@@ -490,7 +491,6 @@ def train(model: nn.Module, dataloader, criterion, optimizer):
         total_loss += loss.item()
         loss.backward()
         optimizer.step()
-        count += 1
 
     return total_loss / count
 
@@ -545,8 +545,8 @@ class NNParameters:
         self.MLP_OUT_SIZE = self.LSTM_LAYERS * self.LSTM_SIZE
         self.OUT_CLASSES = 4
 
-        self.DROP_OUT = 0.2
-        self.LR = 0.001
+        self.DROP_OUT = 0.4
+        self.LR = 10e-5
         self.EPOCHS = 50
 
 
@@ -677,7 +677,7 @@ test_dataloader = torch.utils.data.DataLoader(
 model = BiLSTMNet(device, dictionary).to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=nnp.LR)
-
+best_val_uas = 0
 for epoch in range(nnp.EPOCHS):
     print(f"Starting Epoch {epoch+1}/{nnp.EPOCHS}")
     # torch.load(f"bilstm_e{epoch+1}.pt")
@@ -686,14 +686,18 @@ for epoch in range(nnp.EPOCHS):
 
     log = f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:5.3f} | dev_uas: {val_uas:5.3f} |"
     print(log)
-
-    # save the model on pytorch format
-    torch.save(model.state_dict(), f"bilstm_e{epoch+1}.pt")
+    
+    if val_uas>best_val_uas:
+        best_val_uas = val_uas
+        torch.save(model.state_dict(), f"bilstm.pt")
+    
 
 test_uas = test(model, test_dataloader)
 log = "test_uas: {:5.3f}".format(test_uas)
 print(log)
-train(model, train_dataloader, criterion, optimizer)
+val_validation=train(model, validation_dataloader, criterion, optimizer)
+print(f"Validation score {val_validation:.3f}")
+
 
 # %% [markdown]
 # BERT
@@ -710,8 +714,8 @@ class NNParameters:
         self.MLP2_IN_SIZE = 300
         self.OUT_CLASSES = 4
         self.FREEZE = True
-        self.DROP_OUT = 0.2
-        self.LR = 0.01
+        self.DROP_OUT = 0.4
+        self.LR = 10e-5
         self.EPOCHS = 50
 
 
@@ -960,15 +964,13 @@ for epoch in range(nnp.EPOCHS):
     log = f"Epoch: {epoch:3d} | avg_train_loss: {avg_train_loss:5.3f} | dev_uas: {val_uas:5.3f} |"
     print(log)
 
-    # save the model on pytorch format
-    torch.save(model.state_dict(), f"bilstm_e{epoch+1}.pt")
+    if val_uas>best_val_uas:
+        best_val_uas = val_uas
+        torch.save(model.state_dict(), f"bert.pt")
 
 test_uas = test(model, test_dataloader)
 log = "test_uas: {:5.3f}".format(test_uas)
 print(log)
-train(model, train_dataloader, criterion, optimizer)
-
-# %%
-
-
+val_validation=test(model, validation_dataloader, criterion, optimizer)
+print(f"Validation score {val_validation:.3f}")
 
