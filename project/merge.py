@@ -81,11 +81,8 @@ class ArcEager:
             debug: if True print each move
         """
         if all([isinstance(x, str) for x in sentence]):
-        if all([isinstance(x, str) for x in sentence]):
             if sentence[0] != "<ROOT>":
                 raise Exception("ERROR: first word must be <ROOT>")
-        elif all([isinstance(x, int) for x in sentence]):
-            if sentence[0] != 1:  # token of ROOT is 1
         elif all([isinstance(x, int) for x in sentence]):
             if sentence[0] != 1:  # token of ROOT is 1
                 raise Exception("ERROR: first word must be -1")
@@ -155,25 +152,18 @@ class ArcEager:
 
     def do_move(self, move: int):
         if move == LEFT_ARC:
-    def do_move(self, move: int):
-        if move == LEFT_ARC:
             self.left_arc()
-        elif move == RIGHT_ARC:
         elif move == RIGHT_ARC:
             self.right_arc()
         elif move == SHIFT:
-        elif move == SHIFT:
             self.shift()
         elif move == REDUCE:
-        elif move == REDUCE:
             self.reduce()
-        elif move == NOMOVE:
         elif move == NOMOVE:
             self.nomove()
         return move
 
     def is_tree_final(self):
-        return self.is_finished or (len(self.stack) == 1 and len(self.buffer) == 0)
         return self.is_finished or (len(self.stack) == 1 and len(self.buffer) == 0)
 
     def print_configuration(self):
@@ -235,7 +225,6 @@ class ArcEager:
 # %%
 class Oracle:
     def __init__(self, parser, gold_tree: List[int]):
-    def __init__(self, parser, gold_tree: List[int]):
         self.parser = parser
         self.gold = list(map(int, gold_tree))
         self.gold = list(map(int, gold_tree))
@@ -257,7 +246,6 @@ class Oracle:
     def is_left_arc_gold(self):
         # first element of the of the buffer is the gold head of the topmost element of the stack
         # if empty lists or if top has no head -> return False
-        if len(self.parser.buffer) == 0 or self.parser.stack[-1] == 0:  # if top is ROOT
         if len(self.parser.buffer) == 0 or self.parser.stack[-1] == 0:  # if top is ROOT
             return False
 
@@ -287,14 +275,7 @@ class Oracle:
         if (
             self.parser.list_arcs[s] == -1 or s == 0
         ):  # if top has no head or if top is ROOT
-        if (
-            self.parser.list_arcs[s] == -1 or s == 0
-        ):  # if top has no head or if top is ROOT
             return False
-        if len(self.parser.buffer) == 0:  # if buffer is empty
-            if (
-                self.parser.list_arcs[s] != -1 and s != 0
-            ):  # if top has a head and top is not ROOT
         if len(self.parser.buffer) == 0:  # if buffer is empty
             if (
                 self.parser.list_arcs[s] != -1 and s != 0
@@ -304,12 +285,6 @@ class Oracle:
 
         for i in range(0, len(self.parser.buffer)):
             b = self.parser.buffer[i]
-            if (
-                self.gold[b] == s or self.gold[s] == b
-            ):  # if there's a link k <-/-> j, k < i then do not reduce
-                return False
-
-        return True
             if (
                 self.gold[b] == s or self.gold[s] == b
             ):  # if there's a link k <-/-> j, k < i then do not reduce
@@ -391,7 +366,6 @@ def is_reduce_possible(parser):
 
 # %%
 def parse_moves(parsers: List[ArcEager], moves: Tensor):
-def parse_moves(parsers: List[ArcEager], moves: Tensor):
     _, indices = tsort(moves, descending=True)
     list_moves = []
     list_moves = []
@@ -437,9 +411,6 @@ def parse_moves(parsers: List[ArcEager], moves: Tensor):
 
 def generate_gold(sentence: List[str], gold: List[int]):
     """
-
-def generate_gold(sentence: List[str], gold: List[int]):
-    """
     Generate moves configurations heads for a given parser and oracle
 
 
@@ -450,10 +421,6 @@ def generate_gold(sentence: List[str], gold: List[int]):
         moves: list of moves
         configurations: list of configurations
         arcs: list of heads
-
-    """
-    parser: ArcEager = ArcEager(sentence)
-    oracle: Oracle = Oracle(parser, gold)
 
     """
     parser: ArcEager = ArcEager(sentence)
@@ -621,13 +588,6 @@ print(
 
 
 # %%
-class NNData:
-    def __init__(self, tokens, confs, moves, heads) -> None:
-        self.enc_tokens = tokens
-        self.confs = confs
-        self.moves = moves
-        self.heads = heads
-        # self.dictionary = dictionary
 class NNParameters:
     def __init__(self) -> None:
         self.BATCH_SIZE = BATCH_SIZE
@@ -659,11 +619,6 @@ def extract_att(data: List[NNData], attribute: str):
     return [getattr(d, attribute) for d in data]
 
 
-def extract_att(data: List[NNData], attribute: str):
-    return [getattr(d, attribute) for d in data]
-
-
-def create_dictionary(dataset, threshold: int = 3) -> dict[str, int]:
 def create_dictionary(dataset, threshold: int = 3) -> dict[str, int]:
     """
     Extract from corpus vocabulary V of unique words that appear at least threshold times.
@@ -740,19 +695,11 @@ def process_batch(
     batch: List[List], emb_dictionary: dict[str, int], get_gold_path: bool = False
 ) -> List[NNData]:
     pack: List[NNData] = []
-def process_batch(
-    batch: List[List], emb_dictionary: dict[str, int], get_gold_path: bool = False
-) -> List[NNData]:
-    pack: List[NNData] = []
 
     for sample in batch:
         s, c, m, h = process_sample(sample, emb_dictionary, get_gold_path=get_gold_path)
         pack.append(NNData(s, c, m, h))
-    for sample in batch:
-        s, c, m, h = process_sample(sample, emb_dictionary, get_gold_path=get_gold_path)
-        pack.append(NNData(s, c, m, h))
 
-    return pack
     return pack
 
 
@@ -783,8 +730,6 @@ def train(model: nn.Module, dataloader, criterion, optimizer):
     return total_loss / count
     return total_loss / count
 
-
-def evaluate(gold: List[List[int]], preds: List[List[int]]):
 
 def evaluate(gold: List[List[int]], preds: List[List[int]]):
     total = 0
@@ -821,7 +766,6 @@ def test(model, dataloader: torch.utils.data.dataloader):  # type:ignore
             preds += pred
 
     return evaluate(gold, preds)
-    return evaluate(gold, preds)
 
 # %% [markdown]
 # # BiLSTMNet Definition
@@ -852,19 +796,13 @@ class NNParameters:
 
         self.DROP_OUT = 0.4
         self.LR = 10e-5
-        self.EPOCHS = 50
+        self.EPOCHS = 1
 
 
 nnp = NNParameters()
 
 
 class BiLSTMNet(nn.Module):
-    def __init__(self, device, dictionary, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.device = device
-        self.embeddings = nn.Embedding(
-            len(dictionary), nnp.EMBEDDING_SIZE, padding_idx=dictionary["<pad>"]
-        )
     def __init__(self, device, dictionary, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.device = device
@@ -912,10 +850,6 @@ class BiLSTMNet(nn.Module):
         return self.softmax(
             self.w2(self.dropout(self.activation(self.w1(self.dropout(x)))))
         )
-    def mlp_pass(self, x):
-        return self.softmax(
-            self.w2(self.dropout(self.activation(self.w1(self.dropout(x)))))
-        )
 
     def lstm_pass(self, x):
         x = torch.nn.utils.rnn.pack_sequence(x, enforce_sorted=False)
@@ -929,25 +863,7 @@ class BiLSTMNet(nn.Module):
             self.dropout(self.embeddings(torch.tensor(t).to(self.device)))
             for t in tokens
         ]
-    def lstm_pass(self, x):
-        x = torch.nn.utils.rnn.pack_sequence(x, enforce_sorted=False)
-        h, _ = self.lstm(x)
-        h, _ = torch.nn.utils.rnn.pad_packed_sequence(h)
-        return h
 
-    def forward(self, batch: List[NNData]):
-        tokens = extract_att(batch, "enc_tokens")
-        x = [
-            self.dropout(self.embeddings(torch.tensor(t).to(self.device)))
-            for t in tokens
-        ]
-
-        h = self.lstm_pass(x)
-
-        configurations: List[List[Tuple[int, int]]] = extract_att(batch, "confs")
-        mlp_input = self.get_mlp_input(configurations, h)
-        out = self.mlp_pass(mlp_input)
-        return out
         h = self.lstm_pass(x)
 
         configurations: List[List[Tuple[int, int]]] = extract_att(batch, "confs")
@@ -990,10 +906,6 @@ class BiLSTMNet(nn.Module):
 # %%
 dictionary = create_dictionary(train_dataset)
 train_dataloader = torch.utils.data.DataLoader(
-    train_dataset,
-    batch_size=nnp.BATCH_SIZE,
-    shuffle=True,
-    collate_fn=lambda x: process_batch(x, dictionary, get_gold_path=True),
     train_dataset,
     batch_size=nnp.BATCH_SIZE,
     shuffle=True,
@@ -1090,7 +1002,7 @@ class NNParameters:
         self.FREEZE = True
         self.DROP_OUT = 0.4
         self.LR = 10e-5
-        self.EPOCHS = 50
+        self.EPOCHS = 1
 
 
 
